@@ -10,10 +10,37 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import os
+from datetime import timedelta
 from pathlib import Path
+
+from celery.schedules import crontab
+from django.core.exceptions import ImproperlyConfigured
+
+from dotenv import load_dotenv
+
+sep = os.path.sep
+DOT_ENV_STRING = str(str(Path(__file__).resolve().parent.parent) + f"{sep}.config{sep}.django.env")
+load_dotenv(DOT_ENV_STRING)
+
+from django.core.exceptions import ImproperlyConfigured
+
+
+def get_env_value(env_variable):
+    try:
+        return os.environ.get(env_variable)
+    except KeyError:
+        error_msg = 'Set the {} environment variable'.format(var_name)
+        raise ImproperlyConfigured(error_msg)
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = get_env_value('SECRET_KEY')
+
+DEBUG = get_env_value('DEBUG')
 
 
 # Quick-start development settings - unsuitable for production
@@ -37,7 +64,31 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # third party
+    'rest_framework.authtoken',
+    'crispy_forms',
+    'django_celery_beat',
+    'django_celery_results',
+    # "corsheaders",
+    #    'multiselectfield',
+    #    'timedeltatemplatefilter',
+
+    # own apps
+    'user.apps.UserConfig',
+    'portfolio.apps.PortfolioConfig',
+    'tax_analysis.apps.TaxAnalysisConfig',
+
 ]
+
+REST_FRAMEWORK = {
+    # 'EXCEPTION_HANDLER': 'deimosis.utils.custom_exception_handler',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ]
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -74,13 +125,31 @@ WSGI_APPLICATION = 'cryptotax_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
+DB_HOST = get_env_value('DATABASE_HOST')
+DB_NAME = get_env_value('DATABASE_NAME')
+DB_PORT = str(get_env_value('DATABASE_PORT'))
+DB_USER = get_env_value('DATABASE_USER')
+DB_PASSWORD = get_env_value('DATABASE_PASSWORD')
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # 'ENGINE': 'django.db.backends.sqlite3',
+        # 'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': DB_NAME,
+        'USER': DB_USER,
+        'PASSWORD': DB_PASSWORD,
+        'HOST': DB_HOST,
+        'PORT': DB_PORT,
+        'OPTIONS': {'client_encoding': 'utf-8'},
+        # 'OPTIONS': {
+        #     'read_default_file': '/sql_db.cnf',
+        # },
     }
 }
 
+
+AUTH_USER_MODEL = 'user.CryptoTaxUser'
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
@@ -122,3 +191,29 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Celery Configuration Options
+CELERY_TIMEZONE = 'Europe/London'
+# CELERY_TASK_TRACK_STARTED = True
+# CELERY_TASK_TIME_LIMIT = 30 * 60
+
+# BROKER_URL = 'redis://localhost:6379'
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379'
+# CELERY_ACCEPT_CONTENT = ['application/json']
+# CELERY_TASK_SERIALIZER = 'json'
+# CELERY_RESULT_SERIALIZER = 'json'
+
+# CELERY_BEAT_SCHEDULE = {
+#
+# }
+#
+# # celery setting.
+# CELERY_CACHE_BACKEND = 'default'
+#
+# # django setting.
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+#         'LOCATION': 'my_cache_table',
+#     }
+# }
