@@ -24,11 +24,11 @@ class TransactionType(models.TextChoices):
 
 def transaction_type_from_char(c: str):
     if c == 'O':
-        return Order
+        return TransactionType.ORDER
     if c == 'T':
-        return Transfer
+        return TransactionType.TRANSFER
     if c == 'D':
-        return Deposit
+        return TransactionType.DEPOSIT
     raise NotImplementedError
 
 
@@ -49,7 +49,7 @@ class Transaction(models.Model):
 
     type = models.CharField(max_length=4,
                             choices=TransactionType.choices,
-                            default=TransactionType.ORDER)
+                            null=False, blank=False)
 
     exchange_wallet = models.TextField('exchange_wallet', blank=True, null=True)
 
@@ -85,6 +85,9 @@ class Transfer(models.Model):
 class Deposit(models.Model):
     transaction = models.OneToOneField(Transaction, null=False, on_delete=models.CASCADE)
 
+    buy_datetime = models.DateTimeField('buy_datetime', null=False, blank=False)
     amount = models.FloatField('amount', blank=False, null=False, default=0)
     currency = models.ForeignKey(Currency, blank=True, null=True, on_delete=models.SET_NULL)
     taxable = models.FloatField('taxable', blank=False, null=False, default=0)  # normalized percentage (0,1)
+
+    # TODO buyin date

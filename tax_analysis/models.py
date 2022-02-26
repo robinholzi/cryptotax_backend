@@ -3,15 +3,31 @@ from django.db import models
 from portfolio.models import Portfolio, TransactionType, Transaction, Currency, BaseCurrency
 
 
-# TODO create analysis object in atomic transaction with processables
-
 # TODO slipperage tolerance (ignore small error)
 
-
 class AnalysisMode(models.TextChoices):
-    BUY_ORDER = 'P', 'PROCESSING'
-    SELL_ORDER = 'A', 'ANALYSING'
-    TRANSFER = 'F', 'FINISHED'
+    PROCESSING = 'P', 'PROCESSING'
+    ANALYSING = 'A', 'ANALYSING'
+    FINISHED = 'F', 'FINISHED'
+
+
+class AnalysisAlgorithm(models.TextChoices):
+    ALGO_FIFO = 'FIFO', 'ALGO_FIFO'
+    ALGO_LIFO = 'LIFO', 'ALGO_LIFO'
+    ALGO_OPTIMAL = 'OPT', 'ALGO_OPTIMAL'  # consume highest price first (to keep realized profit low)
+    ALGO_WORST = 'WRST', 'ALGO_WORST'  # consume lowest price first
+
+
+def algorithm_from_char(c: str):
+    if c == 'FIFO':
+        return AnalysisAlgorithm.ALGO_FIFO
+    if c == 'LIFO':
+        return AnalysisAlgorithm.ALGO_LIFO
+    if c == 'OPT':
+        return AnalysisAlgorithm.ALGO_OPTIMAL
+    if c == 'WRST':
+        return AnalysisAlgorithm.ALGO_WORST
+    raise NotImplementedError
 
 
 class PortfolioAnalysis(models.Model):
@@ -19,20 +35,34 @@ class PortfolioAnalysis(models.Model):
 
     base_currency = models.ForeignKey(BaseCurrency, null=False, blank=False, on_delete=models.DO_NOTHING)
 
+    # null = Infinity (never tax free)
+    taxable_period = models.DurationField('taxable_period', null=True, blank=True, default=None)
+
     updated = models.DateTimeField('updated', auto_now=True)
     created = models.DateTimeField('created', auto_now_add=True)
 
     mode = models.CharField(max_length=2,
-                            choices=AnalysisMode.choices)
+                            choices=AnalysisMode.choices,
+                            default=AnalysisMode.PROCESSING)
+
+    algo = models.CharField(max_length=5, choices=AnalysisAlgorithm.choices)
+    transfer_algo = models.CharField(max_length=5, choices=AnalysisAlgorithm.choices)
 
     # only for analysis step (not processable-step)
     cooldown_until = models.DateTimeField('cooldown_until', blank=True,
-                                          null=True)  # if crawling error: delay for some time
+                                          null=True, default=None)  # if crawling error: delay for some time
 
     failed = models.BooleanField('failed', default=False)
 
     def __str__(self):
         return f'PortfolioAnalysis ({self.portfolio} - {self.created})'
+
+
+class CurrencyPriceCache(models.Model):
+    currency = models.ForeignKey(Currency, null=False, blank=False, on_delete=models.CASCADE)
+    base = models.ForeignKey(BaseCurrency, null=False, blank=False, on_delete=models.CASCADE)
+    date = models.DateField('date', null=False, blank=False)
+    price = models.FloatField('price', null=False, blank=False)
 
 
 class PortfolioAnalysisReport(models.Model):
@@ -41,6 +71,7 @@ class PortfolioAnalysisReport(models.Model):
 
     error_message = models.TextField('error_message', blank=True, null=True, default=None)
 
+    realized_profit_sum = models.FloatField('taxable_profit_sum', null=False, blank=False, default=0)  # brutto
     taxable_profit_sum = models.FloatField('taxable_profit_sum', null=False, blank=False, default=0)  # brutto
     fee_sum = models.FloatField('fee_sum', null=False, blank=False, default=0)  # werbungskosten
     # net tax: can be calculated by: tax_sum-fee_sum
@@ -105,6 +136,7 @@ class ProcessableOrder(models.Model):
 class ProcessableDeposit(models.Model):
     transaction = models.OneToOneField(ProcessableTransaction, null=False, on_delete=models.CASCADE)
 
+    buy_datetime = models.DateTimeField('buy_datetime', null=False, blank=False)
     amount = models.FloatField('amount', blank=False, null=False, default=0)
     currency = models.ForeignKey(Currency, blank=True, null=True, on_delete=models.DO_NOTHING)
     taxable = models.FloatField('taxable', blank=False, null=False, default=0)  # normalized percentage (0,1)
@@ -130,6 +162,19 @@ class AnalysableType(models.TextChoices):
     SELL_ORDER = 'SO', 'SellOrder'
     TRANSFER = 'T', 'Transfer'
     DEPOSIT = 'D', 'Deposit'
+
+
+def analysable_type_from_char(c: str):
+    if c == 'BO':
+        return AnalysableType.BUY_ORDER
+    if c == 'SO':
+        return AnalysableType.SELL_ORDER
+    if c == 'T':
+        return AnalysableType.TRANSFER
+    if c == 'D':
+        return AnalysableType.DEPOSIT
+    raise NotImplementedError
+
 
 
 class Analysable(models.Model):
@@ -176,12 +221,20 @@ class ConsumableType(models.TextChoices):
 
 
 class AnalysisConsumable(models.Model):
-    analysis = models.ForeignKey(PortfolioAnalysis, null=False, on_delete=models.CASCADE)
+    analysable = models.ForeignKey(Analysable,
+                                 null=False, on_delete=models.CASCADE)
+
+    datetime = models.DateTimeField('datetime', null=False, blank=False)
 
     type = models.CharField(max_length=4,
                             choices=ConsumableType.choices)
 
-    exchange_wallet = models.TextField('exchange_wallet', blank=True, null=True)
+    # in respect to base currency (cost of one unit of bought unit)
+    price = models.FloatField('price', blank=False, null=False)
+
+    # since transfers can cause fractional consumers with different prices
+    # we also neeed amount here (for deposits & buyorders the same as in analysable)
+    amount = models.FloatField('amount', blank=False, null=False)
 
     def __str__(self):
         return f'AnalysisConsumable'
@@ -206,6 +259,8 @@ class AnalysisSell(models.Model):
 class AnalysisDeposit(models.Model):
     transaction = models.OneToOneField(Analysable, null=False, on_delete=models.CASCADE)
 
+    buy_datetime = models.DateTimeField('buy_datetime', null=False, blank=False)
+
     # deposited asset
     currency = models.ForeignKey(Currency, blank=False, null=False, on_delete=models.DO_NOTHING)
 
@@ -215,7 +270,9 @@ class AnalysisDeposit(models.Model):
     # in respect to base currency (cost of one unit of bought unit)
     price = models.FloatField('price', blank=False, null=False, default=0)
 
+    # tax rate at deposit (not long term capital gain tax)
     taxable = models.FloatField('taxable', blank=False, null=False, default=0)  # normalized percentage (0,1)
+    # absolute taxable = price * taxable
 
     def __str__(self):
         return f'AnalysisDeposit'
@@ -245,13 +302,13 @@ class ConsumerType(models.TextChoices):
 class AnalysisConsumer(models.Model):
     analysis = models.ForeignKey(PortfolioAnalysis, null=False, on_delete=models.CASCADE)
 
-    consumed = models.OneToOneField(AnalysisConsumable, null=False, on_delete=models.CASCADE)
+    consumed = models.ForeignKey(AnalysisConsumable, null=False, on_delete=models.CASCADE)
 
     type = models.CharField(max_length=4,
                             choices=ConsumerType.choices)
 
-    # id of either AnalysisSell or AnalysisTransfer
-    consumer = models.PositiveIntegerField('consumer_id', null=False, blank=False)
+    # id of either AnalysisSell's or AnalysisTransfer's parent Analysable
+    consumer = models.ForeignKey(Analysable, null=False, blank=False, on_delete=models.CASCADE)
 
     # number of accounted asset
     amount = models.FloatField('amount', blank=False, null=False)
@@ -262,15 +319,20 @@ class AnalysisConsumer(models.Model):
 
 class AnalysisSellConsumer(models.Model):
     parent = models.OneToOneField(AnalysisConsumer, null=False, on_delete=models.CASCADE)
-    consumer = models.OneToOneField(AnalysisSell, null=False, on_delete=models.CASCADE)
 
     # realized profit which this consumption causes (in base currency) -> basis for tax calculation
     realized_profit = models.FloatField('realized_profit', blank=False, null=False, default=0)
+    taxable_realized_profit = models.FloatField('taxable_realized_profit', blank=False, null=False, default=0)
 
 
 class AnalysisTransferConsumer(models.Model):
     parent = models.OneToOneField(AnalysisConsumer, null=False, on_delete=models.CASCADE)
-    consumer = models.OneToOneField(AnalysisTransfer, null=False, on_delete=models.CASCADE)
+
+    # consumable which was created from transfer
+    created_consumable = models.OneToOneField(AnalysisConsumable, null=False, on_delete=models.CASCADE)
 
 # SQL QUERIES: select oldest process tasks which are park of an active (not failed, no portfolioreport), analysis
 # TODO: gebühren als werbungskosten
+
+# net profit: sell profits + deposit profits
+

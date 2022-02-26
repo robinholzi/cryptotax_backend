@@ -16,9 +16,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from cryptotax_backend.views import test
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
+    path('api/v1/test/', test, name="test"),
     path('api/v1/portfolio/', include('portfolio.urls'), name="api_v1_portfolio"),
     path('api/v1/user/', include('user.urls'), name="api_v1_portfolio"),
 

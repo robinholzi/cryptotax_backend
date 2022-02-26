@@ -1,14 +1,10 @@
 from __future__ import absolute_import, unicode_literals
 
-from datetime import timedelta
-
 from celery.utils.log import get_task_logger
 
 import os
-from os import write
 
 from celery import Celery, shared_task
-from celery.schedules import crontab
 
 from django.conf import settings
 

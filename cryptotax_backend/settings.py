@@ -70,7 +70,7 @@ INSTALLED_APPS = [
     'crispy_forms',
     'django_celery_beat',
     'django_celery_results',
-    # "corsheaders",
+    "corsheaders",
     #    'multiselectfield',
     #    'timedeltatemplatefilter',
 
@@ -91,6 +91,9 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -98,6 +101,57 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+MIDDLEWARE_CLASSES = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "corsheaders.middleware.CorsPostCsrfMiddleware",
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# TODO remove, debug only
+CORS_ORIGIN_ALLOW_ALL = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "localhost",
+    "127.0.0.1",
+]
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost$",
+]
+
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "UPDATE",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 ROOT_URLCONF = 'cryptotax_backend.urls'

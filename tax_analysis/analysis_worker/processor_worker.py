@@ -1,7 +1,9 @@
-# ALGORITHM
+
+
 import datetime
 
-from portfolio.models import transaction_type_from_char, Transaction, Order, BaseCurrency, Currency, Transfer, Deposit
+from portfolio.models import transaction_type_from_char, Transaction, Order, BaseCurrency, Currency, Transfer, Deposit, \
+    TransactionType
 from tax_analysis.analysis_worker.price_crawler import fetch_price
 from tax_analysis.db import fetch_processable, create_sell_order_from_processable_order, \
     create_buy_order_from_processable_order, create_buy_and_sell_order_from_processable_order, \
@@ -11,9 +13,10 @@ import requests
 
 # TODO periodic analysis worker: delete processables & analysables of failed analysises
 from tax_analysis.models import Analysable, AnalysisBuy, AnalysableType, AnalysisSell, ProcessableOrder, \
-    ProcessableTransaction, ProcessableTransfer, AnalysisTransfer, ProcessableDeposit, AnalysisDeposit
+    ProcessableTransaction, ProcessableTransfer, AnalysisTransfer, ProcessableDeposit, AnalysisDeposit, \
+    analysable_type_from_char
 
-""""
+"""
 {
     'type': 'O'|'D'|'T', 
     'ptid': 656, 
@@ -66,19 +69,13 @@ def processable_worker():
         if trans_fee != 0 and trans_fee_cur_tag != "NONE":
             _final_fee_in_base = trans_fee * fetch_price(fee_currency, base_currency, trans_datetime)
 
-        print("fee (", trans_fee_cur_tag, "->", trans_base_cur_tag, ")=", trans_fee, " -> ", _final_fee_in_base)
-
-        if trans_type == Order:
+        print("trans_type: ", trans_type)
+        if trans_type == TransactionType.ORDER:
             _order_from_currency = str(processable_map.get('order_from_currency'))
-            _order_from_amount = str(processable_map.get('order_from_amount'))
+            _order_from_amount = float(processable_map.get('order_from_amount'))
             _order_to_currency = str(processable_map.get('order_to_currency'))
-            _order_to_amount = str(processable_map.get('order_to_amount'))
+            _order_to_amount = float(processable_map.get('order_to_amount'))
             processable_order = ProcessableOrder.objects.get(id=trans_sub_id)
-
-            print("order (", _order_from_currency, "->", _order_to_currency, ")=", _order_from_amount, " -> ",
-                  _order_to_amount)
-
-            print(_order_from_currency, _order_from_amount, _order_to_currency, _order_to_amount)
 
             order_from_currency = Currency.objects.get(tag=_order_from_currency)
             order_to_currency = Currency.objects.get(tag=_order_to_currency)
@@ -87,7 +84,11 @@ def processable_worker():
                 # from=analysis base -> buy order in respect to base
                 # ------------------------------------------------------------------------
                 order_from_currency = BaseCurrency.objects.get(tag=_order_from_currency)
-                _final_price = fetch_price(order_to_currency, order_from_currency, trans_datetime)
+
+                # _final_price = fetch_price(order_to_currency, order_from_currency, trans_datetime)
+                # price can be calculated by considering from & to amounts: from(base)/to
+                _final_price = _order_from_amount/_order_to_amount
+
                 _analysable = Analysable(
                     analysis_id=trans_analysis_id,
                     datetime=trans_datetime,
@@ -113,7 +114,11 @@ def processable_worker():
                 # to=analysis base -> sell order in respect to base
                 # ------------------------------------------------------------------------
                 order_to_currency = BaseCurrency.objects.get(tag=_order_to_currency)
-                _final_price = fetch_price(order_from_currency, order_to_currency, trans_datetime)
+
+                # _final_price = fetch_price(order_from_currency, order_to_currency, trans_datetime)
+                # price can be calculated by considering from & to amounts: to(base)/from
+                _final_price = _order_to_amount/_order_from_amount
+
                 _analysable = Analysable(
                     analysis_id=trans_analysis_id,
                     datetime=trans_datetime,
@@ -179,12 +184,12 @@ def processable_worker():
                 )
                 return
 
-        elif trans_type == Transfer:
+        elif trans_type == TransactionType.TRANSFER:
             _transfer_from_exchange_wallet = str(processable_map.get('transfer_from_exchange_wallet'))
             _transfer_currency = str(processable_map.get('transfer_currency'))
             _transfer_amount = float(processable_map.get('transfer_amount'))
             processable_transfer = ProcessableTransfer.objects.get(id=trans_sub_id)
-            currency = Currency.objects.get(id=_transfer_currency)
+            currency = Currency.objects.get(tag=_transfer_currency)
 
             _analysable = Analysable(
                 analysis_id=trans_analysis_id,
@@ -201,20 +206,21 @@ def processable_worker():
                 AnalysisTransfer(
                     transaction=_analysable,
                     from_exchange_wallet=_transfer_from_exchange_wallet,
-                    currency=currency.tag,
+                    currency_id=currency.tag,
                     amount=_transfer_amount
                 )
             )
             return
 
-        elif trans_type == Deposit:
-            _deposit_currency = str(processable_map.get('transfer_currency'))
-            _deposit_amount = float(processable_map.get('transfer_amount'))
-            _deposit_taxable = float(processable_map.get('transfer_amount'))
+        elif trans_type == TransactionType.DEPOSIT:
+            deposit_buy_datetime = datetime.datetime.fromisoformat(str(processable_map.get('deposit_buy_datetime')))
+            _deposit_currency = str(processable_map.get('deposit_currency'))
+            _deposit_amount = float(processable_map.get('deposit_amount'))
+            _deposit_taxable = float(processable_map.get('deposit_taxable'))
             processable_deposit = ProcessableDeposit.objects.get(id=trans_sub_id)
-            currency = Currency.objects.get(id=_deposit_currency)
+            currency = Currency.objects.get(tag=_deposit_currency)
 
-            price = fetch_price(currency, base_currency, trans_datetime)
+            price = fetch_price(currency, base_currency, deposit_buy_datetime)
 
             _analysable = Analysable(
                 analysis_id=trans_analysis_id,
@@ -230,7 +236,8 @@ def processable_worker():
                 _analysable,
                 AnalysisDeposit(
                     transaction=_analysable,
-                    currency=currency.tag,
+                    buy_datetime=deposit_buy_datetime,
+                    currency_id=currency.tag,
                     amount=_deposit_amount,
                     price=price,
                     taxable=_deposit_taxable
@@ -239,8 +246,11 @@ def processable_worker():
             return
 
         else:
-            raise NotImplementedError
+            raise NotImplementedError("NotImplementedError")
 
     except Exception as ex:
         print("ERROR:", ex)
         return
+
+
+
