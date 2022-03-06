@@ -1,4 +1,3 @@
-from datetime import datetime
 import dateutil.parser
 
 from rest_framework.authentication import TokenAuthentication
@@ -7,9 +6,12 @@ from rest_framework.utils import json
 
 from cryptotax_backend.utils import error_response, success
 from portfolio.db import query_portfolios_of_user, query_portfolio_of_user_by_id
-from portfolio.helper.rand import random_portfolio
 from portfolio.models import Order, Transaction, Portfolio, Currency, Deposit, Transfer
-from tax_analysis.db import save_orders_transactions, save_deposits_transactions, save_transfers_transactions
+from tax_analysis.db.order_management import save_orders_transactions, save_deposits_transactions, \
+    save_transfers_transactions
+from tax_analysis.db.processing_analysis import query_portfolio_analysis_list
+from tax_analysis.models import PortfolioAnalysis
+from tax_analysis.report_serializer import PortfolioReportCreateSerializer
 from utils.decorators import ensure_authenticated_user
 
 
@@ -17,8 +19,10 @@ from utils.decorators import ensure_authenticated_user
 @authentication_classes([TokenAuthentication])
 @ensure_authenticated_user
 def portfolio_list_my(request, *args, **kwargs):
+    # TODO paging
     portfolios = query_portfolios_of_user(request.user.id)
     return success(200, 0, "portfolios retrieved successfully.", data=portfolios)
+
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])
@@ -42,7 +46,6 @@ def portfolio_details(request, pid, *args, **kwargs):
 def portfolio_create(request, *args, **kwargs):
     try:
         title = request.GET.get('title', None)
-        print("request: ", title)
         if title is None or len(str(title)) < 4:
             return error_response(400, 2, "title argument has to have length >=4!")
 
@@ -127,26 +130,119 @@ def portfolio_delete(request, *args, **kwargs):
         return error_response(500, 0, "internal error.", )
 
 
+# [Reports] @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@ensure_authenticated_user
+def portfolio_list_reports(request, pid, *args, **kwargs):
+    try:
+        # TODO abstract in reusable method
+        pquery = Portfolio.objects.filter(id=pid)
+        if not pquery.exists():
+            return error_response(400, 0, "portfolio does not exist.")
+
+        portfolio = pquery.first()
+
+        if portfolio.user.id != request.user.id:
+            return error_response(401, 1, "you are not allowed to edit this portfolio!")
+
+        # TODO e.g. realTaxResult/freeTax    ---> use analysissettings
+        # TODO paging
+        portfolios = query_portfolio_analysis_list(portfolio.id, 15, 1)
+        return success(200, 0, "portfolios retrieved successfully.", data=portfolios)
+    except Exception as ex:
+        print (ex)
+        return error_response(500, 0, "internal error.")
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@ensure_authenticated_user
+def portfolio_report_create(request, pid, *args, **kwargs):
+    serializer = PortfolioReportCreateSerializer(uid=request.user.id, pid=pid, data=request.POST)
+    try:
+        if serializer.is_valid():
+            return success(200, 0, "analysis created.", {'id': serializer.create(serializer.validated_data)})
+        else:
+            return error_response(400, 0, "failed to instantiate analysis!", data=serializer.errors)
+    except Exception as ex:
+        print(ex)
+        return error_response(500, 0, "internal error.")
+
+
+@api_view(['DELETE'])
+@authentication_classes([TokenAuthentication])
+@ensure_authenticated_user
+def portfolio_report_delete(request, rid, *args, **kwargs):
+    try:
+        pquery = PortfolioAnalysis.objects.filter(id=rid)
+        if not pquery.exists():
+            return error_response(400, 0, "report analysis does not exist.")
+
+        analysis = pquery.first()
+
+        if analysis.portfolio.user.id != request.user.id:
+            return error_response(401, 1, "you are not allowed to edit this analysis!")
+
+        analysis.delete()
+        return success(200, 0, "analysis deleted successfully.")
+    except Exception as ex:
+        print(ex)
+        return error_response(500, 0, "internal error.")
+
+
+
+# TODO steuerlast nach jahr gruppieren
+# TODO download link for mapping excel (extra endpoint)
+# TODO realized profit in respect to coin
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@ensure_authenticated_user
+def portfolio_report_detail(request, rid, *args, **kwargs):
+    try:
+        pquery = PortfolioAnalysis.objects.filter(id=rid)
+        if not pquery.exists():
+            return error_response(400, 0, "report analysis does not exist.")
+
+        analysis = pquery.first()
+
+        if analysis.portfolio.user.id != request.user.id:
+            return error_response(401, 1, "you are not allowed to view this analysis!")
+
+
+        return success(200, 0, "analysis retrieved successfully.", data={
+            'ana_id': raw[0],
+            'title': raw[1],
+            'created': raw[2],
+            'mode': raw[3],
+            'failed': raw[4],
+            'algo': raw[5],
+            'transfer_algo': raw[6],
+            'base_currency': raw[7],
+
+            'txs': raw[8],
+            'taxable_profit': raw[9],
+            'realized_profit': raw[10],
+            'fee_sum': raw[11],
+            'progress': raw[12],
+            'msg': raw[13]
+        })
+    except Exception as ex:
+        print(ex)
+        return error_response(500, 0, "internal error.")
+
+
 # [Transactions] @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
 @api_view(['GET'])
 @authentication_classes([TokenAuthentication])
 @ensure_authenticated_user
-def portfolio_list_reports(request, *args, **kwargs):
-    portfolios = query_portfolios_of_user(request.user.id)
-    return success(200, 0, "portfolios retrieved successfully.", data=portfolios)
-
-
-@api_view(['GET'])
-@authentication_classes([TokenAuthentication])
-@ensure_authenticated_user
 def portfolio_list_txs(request, *args, **kwargs):
-    portfolios = query_portfolios_of_user(request.user.id)
+    portfolios = query_portfolios_of_user(request.user.id)  # TODO unimplemented
     return success(200, 0, "portfolios retrieved successfully.", data=portfolios)
-
-
-# @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
 @api_view(['POST'])
@@ -399,3 +495,5 @@ def create_transfer_list(request, *args, **kwargs):
     except Exception as ex:
         print(ex)
         return error_response(500, 0, "internal error.", )
+
+# @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

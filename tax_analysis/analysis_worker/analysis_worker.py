@@ -38,9 +38,10 @@
 """
 import datetime
 
-from tax_analysis.db import allocate_analyzable, consumable_from_buy_order, consumable_from_deposit, \
-    fetch_next_consumable, fetch_already_allocated_sum, consume_sell, analysable_already_done, consume_transfer
-from tax_analysis.models import AnalysableType, analysable_type_from_char, algorithm_from_char, AnalysisAlgorithm
+from tax_analysis.db.processing_analysis import allocate_analyzable, consumable_from_buy_order, \
+    fetch_already_allocated_sum, analysable_already_done, fetch_next_consumable, consume_sell, consumable_from_deposit, \
+    consume_transfer
+from tax_analysis.models import AnalysableType, analysable_type_from_char, algorithm_from_char
 
 
 def analysis_worker():

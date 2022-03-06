@@ -4,45 +4,106 @@ from django.db import IntegrityError, transaction
 from django.db import connection
 from django.db.utils import DatabaseErrorWrapper
 
-from portfolio.models import Order, Deposit, Transfer
+from portfolio.models import Currency
 from tax_analysis.models import Analysable, AnalysisBuy, AnalysisSell, ProcessableTransaction, ProcessableOrder, \
     ProcessableTransfer, AnalysisTransfer, ProcessableDeposit, AnalysisDeposit, AnalysisAlgorithm
 
 
 @transaction.atomic
-def save_orders_transactions(orders: list[Order]):
+def create_analysis(portfolio_id: int, title: str,
+                    base_currency: Currency,
+                    algo: str, transfer_algo: str,
+                    untaxed_allowance: float,
+                    mining_tax_method: str, mining_deposit_profit_rate: float,
+                    cross_wallet_sells: bool, taxable_period_days: int):
+    query_str = """
+        select create_init_portfolio_analysis 
+        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+    """
+
     try:
         with transaction.atomic():
-            for order in orders:
-                order.transaction.save()
-                order.save()
+            with connection.cursor() as cursor:
+                cursor.execute(query_str, [
+                    portfolio_id, title,
+                    base_currency.tag,
+                    algo, transfer_algo,
+                    untaxed_allowance,
+                    mining_tax_method, mining_deposit_profit_rate,
+                    cross_wallet_sells, taxable_period_days])
+                raw_fetched = cursor.fetchall()
+
+                if len(raw_fetched) == 0:
+                    return None
+
+                for raw in raw_fetched:
+                    return int(raw[0])
+
+                return None
+
     except IntegrityError as ie:
         print(ie)
-        raise DatabaseErrorWrapper("Order/Transaction creation not successful.")
+        raise DatabaseErrorWrapper("Community creation not successful.")
 
 
+# page_no: 1-based
 @transaction.atomic
-def save_deposits_transactions(deposits: list[Deposit]):
+def query_portfolio_analysis_list(portfolio_id: int, pagesize: int, page_no: int = 1):
+    pagesize = max(5, min(200,pagesize))
+    page_no = max(0, page_no)
+
+    query_str = """
+        select ana.id, ana.title, ana.created, ana.mode, ana.failed, ana.algo, ana.transfer_algo, ana.base_currency_id,
+        ((select count(distinct(pt.id)) from tax_analysis_processabletransaction pt where pt.analysis_id=ana.id)
+         +(select count(distinct(ta.id)) from tax_analysis_analysable ta where ta.analysis_id=ana.id)) as txs,
+        anarep.taxable_profit_sum as taxable_profit,
+        anarep.realized_profit_sum as realized_profit,
+        anarep.fee_sum as fees,
+        (ppa.done + apa.done)/2.0 as progress,
+        case when anarep.id is NULL then 'processing...' else anarep.error_message end
+        from tax_analysis_portfolioanalysis ana
+        left outer join tax_analysis_portfolioanalysisreport anarep ON anarep.analysis_id = ana.id
+        join v_processed_percentage_per_analysis ppa ON ppa.id=ana.id
+        join v_analysed_percentage_per_analysis apa ON apa.id=ana.id
+        where ana.portfolio_id=%s
+        order by ana.id
+        limit %s
+        offset %s;
+    """
+
     try:
         with transaction.atomic():
-            for deposit in deposits:
-                deposit.transaction.save()
-                deposit.save()
+            with connection.cursor() as cursor:
+                cursor.execute(query_str, [
+                    portfolio_id, pagesize, (page_no-1) * pagesize
+                ])
+
+                analysis_list = []
+
+                for raw in cursor.fetchall():
+                    analysis_list.append({
+                        'ana_id': raw[0],
+                        'title': raw[1],
+                        'created': raw[2],
+                        'mode': raw[3],
+                        'failed': raw[4],
+                        'algo': raw[5],
+                        'transfer_algo': raw[6],
+                        'base_currency': raw[7],
+
+                        'txs': raw[8],
+                        'taxable_profit': raw[9],
+                        'realized_profit': raw[10],
+                        'fee_sum': raw[11],
+                        'progress': raw[12],
+                        'msg': raw[13]
+                    })
+
+                return analysis_list
+
     except IntegrityError as ie:
         print(ie)
-        raise DatabaseErrorWrapper("Deposit/Transaction creation not successful.")
-
-
-@transaction.atomic
-def save_transfers_transactions(transfers: list[Transfer]):
-    try:
-        with transaction.atomic():
-            for transfer in transfers:
-                transfer.transaction.save()
-                transfer.save()
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("Deposit/Transaction creation not successful.")
+        raise DatabaseErrorWrapper("Community creation not successful.")
 
 
 @transaction.atomic
@@ -77,7 +138,7 @@ def fetch_processable():
         )
         ),
 
-    
+
         selected as (
             select * 
     -- 		into selected
@@ -86,7 +147,7 @@ def fetch_processable():
             order by created asc
             limit 1
         ),
-        
+
         updated as (
             update tax_analysis_processabletransaction 
             set cooldown_until=%s
@@ -94,7 +155,7 @@ def fetch_processable():
                 and not (id is null)
                 and exists (select * from selected)
         )
-        
+
         select s.*, a.base_currency_id
         from selected s
         join tax_analysis_portfolioanalysis a
@@ -250,7 +311,7 @@ def allocate_analyzable():
                 deposit.buy_datetime deposit_buy_datetime, 
 				deposit.taxable deposit_taxable, 
                 transfer.from_exchange_wallet transfer_from_exchange_wallet
-        
+
             from (
             select 
                 ana.type,
@@ -258,7 +319,7 @@ def allocate_analyzable():
                 ana.fee, ana.exchange_wallet, 
                 analysis.algo algo, analysis.transfer_algo transfer_algo,
                 analysis.taxable_period taxable_period
-        
+
             from tax_analysis_analysable ana
                 join tax_analysis_portfolioanalysis analysis
                     on ana.analysis_id = analysis.id
@@ -266,7 +327,7 @@ def allocate_analyzable():
                 and analysis.failed=False
                 and analysis.mode='A'
                 and (analysis.cooldown_until is null or analysis.cooldown_until<=now())
-        
+
                 -- no earlier (by datetime) unanalysed analysable in whole analysis
                 and not exists (
                     select * 
@@ -277,7 +338,7 @@ def allocate_analyzable():
                         and ana2.datetime < ana.datetime -- came earlier (by datetime)
                         and not ana2.analysed -- not yet analysed
                 )
-        
+
             -- order viable analysables by creation date (to be fair across different analysises)
             order by ana.created asc
             limit 1
@@ -288,7 +349,7 @@ def allocate_analyzable():
             left outer join tax_analysis_analysisdeposit deposit on deposit.transaction_id=ana.tid 
             left outer join tax_analysis_analysistransfer transfer on transfer.transaction_id=ana.tid 
         ),
-        
+
         updated as (
             update tax_analysis_portfolioanalysis 
             set cooldown_until= %s
@@ -296,7 +357,7 @@ def allocate_analyzable():
                 and not (id is null)
                 and exists (select * from selected)
         )
-        
+
         select * from selected;
     """
 
@@ -358,7 +419,7 @@ def consumable_from_buy_order(buy_order_id: int):
             select anaid, datetime, 'BO', price, amount
             from selected
         ),
-        
+
         updated as (
             update tax_analysis_portfolioanalysis
             set cooldown_until=null
@@ -367,7 +428,7 @@ def consumable_from_buy_order(buy_order_id: int):
                 from selected s
             ) and exists (select * from selected)
         )
-        
+
         update tax_analysis_analysable
         set analysed=True
         where id=all (
@@ -401,13 +462,13 @@ def consumable_from_deposit(deposit_id: int):
                 and analysis.mode='A'
                 and analysis.cooldown_until > now() -- cooldown still active
         ),
-        
+
         inserted as (
             insert into tax_analysis_analysisconsumable (analysable_id, datetime, type, price, amount)
             select anaid, buy_datetime, 'D', price, amount
             from selected
         ),
-        
+
         updated as (
             update tax_analysis_portfolioanalysis
             set cooldown_until=null
@@ -416,7 +477,7 @@ def consumable_from_deposit(deposit_id: int):
                 from selected s
             ) and exists (select * from selected)
         )
-        
+
         update tax_analysis_analysable
         set analysed=True
         where id=all (
@@ -474,16 +535,16 @@ def fetch_next_consumable(
         consumable.analysis_id=%s
         and consumable.exchange_wallet=%s
         and consumable.currency=%s
-        
+
     group by 
         consumable.cid, consumable.ctype,
         consumable.cid, consumable.cdatetime, 
         consumable.ctype, consumable.cprice,
         consumable.amount
-        
+
     having (consumable.amount - coalesce(sum(consumer.amount), 0)) > %s
     -- TODO error tolerance
-    
+
      -- after transfer the amount has later date than the buy order
     order by {order_by_attr} {asc_desc}
     limit 1
@@ -577,7 +638,7 @@ def analysable_already_done(analysable_id: int):
                 from selected s
             ) and exists (select * from selected)
         )
-        
+
         update tax_analysis_analysable
         set analysed=True
         where id=all (
@@ -614,7 +675,7 @@ def consume_sell(analysis_id: int, analysable_id: int, consumed_id: int, consume
     query_str = f"""
     insert into tax_analysis_analysisconsumer (analysis_id, consumed_id, type, consumer_id, amount)
     values (%s, %s, 'SO', %s, %s);
-    
+
     with selected as (
         select s.id sellid, ana.id anaid, s.amount amount, analysis.id analysisid, type, exchange_wallet
         from tax_analysis_analysissell s
@@ -642,7 +703,7 @@ def consume_sell(analysis_id: int, analysable_id: int, consumed_id: int, consume
             from selected s
         ) and exists (select * from selected)
     )
-    
+
     {analysed_part}
     ;
     """
@@ -697,23 +758,23 @@ def consume_transfer(analysis_id: int, analysable_id: int, consumed_id: int, con
     query_str = f"""
     insert into tax_analysis_analysisconsumer (analysis_id, consumed_id, type, consumer_id, amount)
     values (%s, %s, 'T', %s, %s);
-    
+
     {select_query}
-    
+
     insert into tax_analysis_analysisconsumable (analysable_id, datetime, type, price, amount)
     select  anaid, %s, 'T', %s, %s
     from selected
     limit 1;
 
     {select_query},
-    
+
     inserted3 as (
         insert into tax_analysis_analysistransferconsumer (parent_id, created_consumable_id)
         select 
             (select currval('tax_analysis_analysisconsumer_id_seq')), 
             (select currval('tax_analysis_analysisconsumable_id_seq'))
     ),
-    
+
     updated as (
         update tax_analysis_portfolioanalysis
         set cooldown_until=null

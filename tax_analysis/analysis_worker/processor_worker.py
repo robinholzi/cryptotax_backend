@@ -2,19 +2,16 @@
 
 import datetime
 
-from portfolio.models import transaction_type_from_char, Transaction, Order, BaseCurrency, Currency, Transfer, Deposit, \
-    TransactionType
+from portfolio.models import transaction_type_from_char, BaseCurrency, Currency, TransactionType
 from tax_analysis.analysis_worker.price_crawler import fetch_price
-from tax_analysis.db import fetch_processable, create_sell_order_from_processable_order, \
-    create_buy_order_from_processable_order, create_buy_and_sell_order_from_processable_order, \
-    create_transfer_from_processable_transfer, create_deposit_from_processable_deposit
-
-import requests
 
 # TODO periodic analysis worker: delete processables & analysables of failed analysises
+from tax_analysis.db.processing_analysis import create_buy_order_from_processable_order, \
+    create_sell_order_from_processable_order, create_buy_and_sell_order_from_processable_order, \
+    create_transfer_from_processable_transfer, create_deposit_from_processable_deposit, fetch_processable
 from tax_analysis.models import Analysable, AnalysisBuy, AnalysableType, AnalysisSell, ProcessableOrder, \
-    ProcessableTransaction, ProcessableTransfer, AnalysisTransfer, ProcessableDeposit, AnalysisDeposit, \
-    analysable_type_from_char
+    ProcessableTransaction, ProcessableTransfer, AnalysisTransfer, ProcessableDeposit, AnalysisDeposit
+
 
 """
 {

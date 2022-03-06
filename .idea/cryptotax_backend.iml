@@ -18,6 +18,7 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Django Lib" level="project" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="PLAIN" />
@@ -27,7 +28,7 @@
     <option name="TEMPLATE_CONFIGURATION" value="Django" />
     <option name="TEMPLATE_FOLDERS">
       <list>
-        <option value="$MODULE_DIR$/venv/Lib/site-packages/tornado/test/templates" />
+        <option value="$MODULE_DIR$/venv/Lib/site-packages/django/forms/templates" />
       </list>
     </option>
   </component>

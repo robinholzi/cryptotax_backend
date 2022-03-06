@@ -18,6 +18,19 @@ class AnalysisAlgorithm(models.TextChoices):
     ALGO_WORST = 'WRST', 'ALGO_WORST'  # consume lowest price first
 
 
+class MiningTaxMethod(models.TextChoices):
+    # tax mined coins on deposit with certain percentage, afterwards only gains taxable
+    ON_DEPOSIT_AND_GAINS = 'D&G', 'ON_DEPOSIT_AND_GAINS'
+
+    # tax mined coins on deposit with certain percentage, afterwards tax free gains
+    ON_DEPOSIT_AND_NOT_GAINS = 'D&NG', 'ON_DEPOSIT_AND_NOT_GAINS'
+
+    # only tax sell by 100% of coins are gains (= buy at price 0)
+    NOT_ON_DEPOSIT_AND_FULL_GAINS = 'ND&FG', 'NOT_ON_DEPOSIT_AND_FULL_GAINS'
+
+    # no crypto taxation
+    NOT_ON_DEPOSIT_AND_NOT_GAINS = 'ND&NG', 'NOT_ON_DEPOSIT_AND_NOT_GAINS'
+
 def algorithm_from_char(c: str):
     if c == 'FIFO':
         return AnalysisAlgorithm.ALGO_FIFO
@@ -32,27 +45,52 @@ def algorithm_from_char(c: str):
 
 class PortfolioAnalysis(models.Model):
     portfolio = models.ForeignKey(Portfolio, null=False, on_delete=models.CASCADE)
+    title = models.TextField('title', blank=True, null=True)
+
+    # settings ------------------------------------------------------------------------
 
     base_currency = models.ForeignKey(BaseCurrency, null=False, blank=False, on_delete=models.DO_NOTHING)
 
-    # null = Infinity (never tax free)
-    taxable_period = models.DurationField('taxable_period', null=True, blank=True, default=None)
+    algo = models.CharField(max_length=5, choices=AnalysisAlgorithm.choices)
+    transfer_algo = models.CharField(max_length=5, choices=AnalysisAlgorithm.choices)
 
-    updated = models.DateTimeField('updated', auto_now=True)
-    created = models.DateTimeField('created', auto_now_add=True)
+    # tax settings ++++++++++++++++++++++++++++++
+    # allowance from which onward profits have to be taxed
+    untaxed_allowance = models.FloatField(
+        'untaxed_allowance', default=0, null=None)
+
+    mining_tax_method = models.CharField(max_length=10,
+                            choices=MiningTaxMethod.choices,
+                            default=MiningTaxMethod.ON_DEPOSIT_AND_GAINS)
+
+    # percentage of deposit which is considers (and summed up) as profit
+    mining_deposit_profit_rate = models.FloatField(
+        'mining_deposit_profit_rate', default=1.0, null=False
+    )
+
+    # TODO: unimplemented
+    cross_wallet_sells = models.BooleanField('cross_wallet_sells', null=False, default=False)
+
+    # null = Infinity (never tax free)
+    # 0 always tax free -> just calculate profits
+    taxable_period_days = models.IntegerField('taxable_period_days', null=True, blank=True, default=None)
+
+    # for processing (initialized by default) -----------------------------------------
 
     mode = models.CharField(max_length=2,
                             choices=AnalysisMode.choices,
                             default=AnalysisMode.PROCESSING)
-
-    algo = models.CharField(max_length=5, choices=AnalysisAlgorithm.choices)
-    transfer_algo = models.CharField(max_length=5, choices=AnalysisAlgorithm.choices)
 
     # only for analysis step (not processable-step)
     cooldown_until = models.DateTimeField('cooldown_until', blank=True,
                                           null=True, default=None)  # if crawling error: delay for some time
 
     failed = models.BooleanField('failed', default=False)
+
+    # ---------------------------------------------------------------------------------
+
+    updated = models.DateTimeField('updated', auto_now=True)
+    created = models.DateTimeField('created', auto_now_add=True)
 
     def __str__(self):
         return f'PortfolioAnalysis ({self.portfolio} - {self.created})'
@@ -67,7 +105,6 @@ class CurrencyPriceCache(models.Model):
 
 class PortfolioAnalysisReport(models.Model):
     analysis = models.OneToOneField(PortfolioAnalysis, null=False, on_delete=models.CASCADE)
-    title = models.TextField('title', blank=True, null=True)
 
     error_message = models.TextField('error_message', blank=True, null=True, default=None)
 
