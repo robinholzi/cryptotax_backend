@@ -1,0 +1,2 @@
+select *
+from portfolio_order o join portfolio_transaction t ON t.id = o.transaction_id

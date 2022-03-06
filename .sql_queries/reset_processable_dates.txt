@@ -1,0 +1,5 @@
+update tax_analysis_processabletransaction 
+set cooldown_until=(now() - interval '10 minutes');
+
+update tax_analysis_processabletransaction 
+set cooldown_until=null;
