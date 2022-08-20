@@ -1,0 +1,15 @@
+{% extends 'email/email_base.html' %}
+
+{% block preheader %}We're thrilled to have you here! Get ready to dive into your new account.{% endblock %}
+
+{% block email_content %}
+    {% url 'user_auth:activate' uid token as temp_url_args %}
+    {% with protocol|add:"://"|add:domain|add:temp_url_args as temp_activate_url %}
+
+    {% include "email/email_base_text.html" with text="We're excited to have you get started. First, you need to confirm your account. <br>Just press the button below." %}
+    {% include "email/email_base_button.html" with url=temp_activate_url link_text="Confirm Account" %}
+    {% include "email/email_base_text.html" with text="If that doesn't work, copy and paste the following link in your browser:" pad_bottom="0px" %}
+    {% include "email/email_base_link.html" with url=temp_activate_url pad_top="0px" %}
+
+    {% endwith %}
+{% endblock %}

@@ -1,8 +1,22 @@
 from django.contrib import admin
 
-from tax_analysis.models import PortfolioAnalysis, PortfolioAnalysisReport, ProcessableTransaction, ProcessableOrder, \
-    ProcessableDeposit, ProcessableTransfer, Analysable, AnalysisBuy, AnalysisConsumable, AnalysisSell, AnalysisDeposit, \
-    AnalysisTransfer, AnalysisConsumer, AnalysisSellConsumer, AnalysisTransferConsumer
+from tax_analysis.models import (
+    Analysable,
+    AnalysisBuy,
+    AnalysisConsumable,
+    AnalysisConsumer,
+    AnalysisDeposit,
+    AnalysisSell,
+    AnalysisSellConsumer,
+    AnalysisTransfer,
+    AnalysisTransferConsumer,
+    PortfolioAnalysis,
+    PortfolioAnalysisReport,
+    ProcessableDeposit,
+    ProcessableOrder,
+    ProcessableTransaction,
+    ProcessableTransfer,
+)
 
 admin.site.register(PortfolioAnalysis)
 admin.site.register(PortfolioAnalysisReport)

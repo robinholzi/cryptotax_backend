@@ -47,11 +47,11 @@
 #             'view': self
 #         }
 #
-#     def get_serializer(self, *args, **kwargs):
+#     def get_serializer(self, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]):
 #         kwargs['context'] = self.get_serializer_context()
-#         return self.serializer_class(*args, **kwargs)
+#         return self.serializer_class(*args: tuple[Any, ...], **kwargs: tuple[Any, ...])
 #
-#     def post(self, request, *args, **kwargs):
+#     def post(self, request, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]):
 #         serializer = self.get_serializer(data=request.data)
 #         serializer.is_valid(raise_exception=True)
 #         user = serializer.validated_data['user']

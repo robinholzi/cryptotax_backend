@@ -1,12 +1,18 @@
-
-from django.db import IntegrityError, transaction
+from django.db import (
+    IntegrityError,
+    transaction,
+)
 from django.db.utils import DatabaseErrorWrapper
 
-from portfolio.models import Order, Deposit, Transfer
+from portfolio.models import (
+    Deposit,
+    Order,
+    Transfer,
+)
 
 
 @transaction.atomic
-def save_orders_transactions(orders: list[Order]):
+def save_orders_transactions(orders: list[Order]) -> None:
     try:
         with transaction.atomic():
             for order in orders:
@@ -18,7 +24,7 @@ def save_orders_transactions(orders: list[Order]):
 
 
 @transaction.atomic
-def save_deposits_transactions(deposits: list[Deposit]):
+def save_deposits_transactions(deposits: list[Deposit]) -> None:
     try:
         with transaction.atomic():
             for deposit in deposits:
@@ -30,7 +36,7 @@ def save_deposits_transactions(deposits: list[Deposit]):
 
 
 @transaction.atomic
-def save_transfers_transactions(transfers: list[Transfer]):
+def save_transfers_transactions(transfers: list[Transfer]) -> None:
     try:
         with transaction.atomic():
             for transfer in transfers:
@@ -39,5 +45,3 @@ def save_transfers_transactions(transfers: list[Transfer]):
     except IntegrityError as ie:
         print(ie)
         raise DatabaseErrorWrapper("Deposit/Transaction creation not successful.")
-
-

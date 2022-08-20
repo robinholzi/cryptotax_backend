@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from portfolio.models import Order, Transaction, Portfolio, Transfer, Deposit
+from portfolio.models import (
+    Deposit,
+    Order,
+    Portfolio,
+    Transaction,
+    Transfer,
+)
 
 admin.site.register(Portfolio)
 admin.site.register(Transaction)

@@ -1,0 +1,10 @@
+{% extends 'email/email_base.txt' %}
+
+{% block email_content %}
+We're excited to have you get started. First, you need to confirm your account.
+
+To do so, please click the following link, or copy and paste it
+into your web browser:
+
+{{ protocol }}://{{ domain }}{% url 'user_auth:activate' uid token %}
+{% endblock %}

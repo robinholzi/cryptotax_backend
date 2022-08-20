@@ -1,4 +1,3 @@
-
 """
 {
     'type': 'O'|'D'|'T',
@@ -38,14 +37,25 @@
 """
 import datetime
 
-from tax_analysis.db.processing_analysis import allocate_analyzable, consumable_from_buy_order, \
-    fetch_already_allocated_sum, analysable_already_done, fetch_next_consumable, consume_sell, consumable_from_deposit, \
-    consume_transfer
-from tax_analysis.models import AnalysableType, analysable_type_from_char, algorithm_from_char
+from tax_analysis.db.processing_analysis import (
+    allocate_analyzable,
+    analysable_already_done,
+    consumable_from_buy_order,
+    consumable_from_deposit,
+    consume_sell,
+    consume_transfer,
+    fetch_already_allocated_sum,
+    fetch_next_consumable,
+)
+from tax_analysis.models import (
+    AnalysableType,
+    algorithm_from_char,
+    analysable_type_from_char,
+)
 
 
-def analysis_worker():
-    print("dispatching processable_worker...")
+def analysis_worker() -> None:
+    print("dispatching analysis_worker...")
     # cur = Currency.objects.get(tag="BTC")
     # base = BaseCurrency.objects.get(tag="EUR")
     # print("price:", fetch_price(cur, base, datetime.date(year=2020, month=12, day=12)))
@@ -56,23 +66,25 @@ def analysis_worker():
         return
 
     try:
-        ana_type = analysable_type_from_char(analysable_map.get('type'))
-        ana_tid = int(analysable_map.get('tid'))
-        ana_sub_id = int(analysable_map.get('sub_id'))
-        analysis_id = int(analysable_map.get('analysis_id'))
-        ana_datetime = datetime.datetime.fromisoformat(str(analysable_map.get('datetime')))
-        ana_fee = float(analysable_map.get('fee'))
-        ana_exchange_wallet = str(analysable_map.get('exchange_wallet'))
+        ana_type = analysable_type_from_char(analysable_map.get("type"))
+        ana_tid = int(analysable_map.get("tid"))
+        ana_sub_id = int(analysable_map.get("sub_id"))
+        analysis_id = int(analysable_map.get("analysis_id"))
+        ana_datetime = datetime.datetime.fromisoformat(
+            str(analysable_map.get("datetime"))
+        )
+        # ana_fee = float(analysable_map.get("fee"))
+        ana_exchange_wallet = str(analysable_map.get("exchange_wallet"))
 
         # for transfer/sell logic
-        ana_algo = algorithm_from_char(str(analysable_map.get('algo')))
-        ana_transfer_algo = algorithm_from_char(str(analysable_map.get('transfer_algo')))
-        ana_taxable_period = analysable_map.get('taxable_period')
+        ana_algo = algorithm_from_char(str(analysable_map.get("algo")))
+        # ana_transfer_algo = algorithm_from_char(str(analysable_map.get("transfer_algo")))
+        ana_taxable_period_days = analysable_map.get("ana_taxable_period_days")
 
         print("ana_tid: ", ana_tid)
         print("analysis_id: ", analysis_id)
         print("ana_type: ", ana_type)
-        print("ana_taxable_period: ", ana_taxable_period)
+        print("ana_taxable_period_days: ", ana_taxable_period_days)
 
         if ana_type == AnalysableType.BUY_ORDER:
             print("BUY_ORDER: ")
@@ -80,48 +92,54 @@ def analysis_worker():
 
         elif ana_type == AnalysableType.SELL_ORDER:
             print("SELL_ORDER: ")
-            currency_id = str(analysable_map.get('currency'))
-            sell_price = float(analysable_map.get('buy_sell_deposit_price'))
-            amount = float(analysable_map.get('amount'))
+            currency_id = str(analysable_map.get("currency"))
+            sell_price = float(analysable_map.get("buy_sell_deposit_price"))
+            amount = float(analysable_map.get("amount"))
             amount_already_consumed = float(fetch_already_allocated_sum(ana_tid))
             amount_needed = amount - amount_already_consumed
 
-            print("amount_already_consumed, amount_needed, amount: ",
-                  amount_already_consumed, amount_needed, amount)
+            print(
+                "amount_already_consumed, amount_needed, amount: ",
+                amount_already_consumed,
+                amount_needed,
+                amount,
+            )
 
             TOLERANCE = 0.0000000000001  # TODO
             if abs(amount_needed) <= TOLERANCE:
                 return analysable_already_done(ana_tid)
 
             next_consumable = fetch_next_consumable(
-                analysis_id, ana_exchange_wallet, currency_id,
-                ana_algo,
-                TOLERANCE
+                analysis_id, ana_exchange_wallet, currency_id, ana_algo, TOLERANCE
             )
 
             print("next_consumable: ", next_consumable)
-            consumed_id = int(next_consumable.get('id'))
-            buy_datetime = datetime.datetime.fromisoformat(str(next_consumable.get('datetime', 0.0)))
-            total_amount = float(next_consumable.get('amount', 0.0))
-            already_consumed = float(next_consumable.get('consumed', 0.0))
-            buy_price = float(next_consumable.get('price', 0.0))
+            consumed_id = int(next_consumable.get("id"))
+            buy_datetime = datetime.datetime.fromisoformat(
+                str(next_consumable.get("datetime", 0.0))
+            )
+            total_amount = float(next_consumable.get("amount", 0.0))
+            already_consumed = float(next_consumable.get("consumed", 0.0))
+            buy_price = float(next_consumable.get("price", 0.0))
             unconsumed_amount = total_amount - already_consumed
 
-            print('unconsumed_amount: ', unconsumed_amount)
+            print("unconsumed_amount: ", unconsumed_amount)
             consumption_amount = max(min(amount_needed, unconsumed_amount), 0)
-            print('consumption_amount: ', consumption_amount)
+            print("consumption_amount: ", consumption_amount)
 
             finished = abs(consumption_amount - amount_needed) <= TOLERANCE
 
             # payout amount - buy in amount (in base currency)
-            realized_profit = consumption_amount * (sell_price-buy_price)
-            taxable_realized_profit = 0
+            realized_profit = consumption_amount * (sell_price - buy_price)
+            taxable_realized_profit = 0.0
 
             # hold period = sell datetime - buy datetime
             # do not use tax-free period for losses
-            if (realized_profit < 0) \
-                    or ana_taxable_period is None \
-                    or (ana_datetime-buy_datetime) < ana_taxable_period:
+            if (
+                (realized_profit < 0)
+                or ana_taxable_period_days is None
+                or (ana_datetime - buy_datetime) < ana_taxable_period_days
+            ):
                 # taxable
                 print("---> taxable! ")
                 taxable_realized_profit = realized_profit
@@ -132,27 +150,34 @@ def analysis_worker():
                 ana_tid,
                 consumed_id,
                 consumption_amount,
-
                 realized_profit,
                 taxable_realized_profit,
-
-                finished
+                finished,
             )
 
         elif ana_type == AnalysableType.DEPOSIT:
             print("DEPOSIT: ")
+
+            # TODO possible taxation of mining
+
             return consumable_from_deposit(ana_sub_id)
 
         elif ana_type == AnalysableType.TRANSFER:
             print("TRANSFER: ")
-            currency_id = str(analysable_map.get('currency'))
-            amount = float(analysable_map.get('amount'))
+            currency_id = str(analysable_map.get("currency"))
+            amount = float(analysable_map.get("amount"))
             amount_already_consumed = float(fetch_already_allocated_sum(ana_tid))
             amount_needed = amount - amount_already_consumed
-            from_exchange_wallet = str(analysable_map.get('transfer_from_exchange_wallet'))
+            from_exchange_wallet = str(
+                analysable_map.get("transfer_from_exchange_wallet")
+            )
 
-            print("amount_already_consumed, amount_needed, amount: ",
-                  amount_already_consumed, amount_needed, amount)
+            print(
+                "amount_already_consumed, amount_needed, amount: ",
+                amount_already_consumed,
+                amount_needed,
+                amount,
+            )
 
             TOLERANCE = 0.0000000000001  # TODO
             if abs(amount_needed) <= TOLERANCE:
@@ -160,21 +185,27 @@ def analysis_worker():
 
             # Transfers do not cause profit realization
             next_consumable = fetch_next_consumable(
-                analysis_id, from_exchange_wallet, currency_id, ana_algo,
-                TOLERANCE
+                analysis_id, from_exchange_wallet, currency_id, ana_algo, TOLERANCE
             )
             # TODO query empty?
 
-            consumed_id = int(next_consumable.get('id'))
-            buy_datetime = datetime.datetime.fromisoformat(str(next_consumable.get('datetime', 0.0)))
-            total_amount = float(next_consumable.get('amount', 0.0))
-            already_consumed = float(next_consumable.get('consumed', 0.0))
-            buy_price = float(next_consumable.get('price', 0.0))
+            # TODO
+            # used iff DepositType == CUSTOM_RATE
+            # taxable = models.FloatField('taxable', blank=False, null=False, default=0)  # normalized percentage (0,1)
+            # absolute taxable = price * taxable
+
+            consumed_id = int(next_consumable.get("id"))
+            buy_datetime = datetime.datetime.fromisoformat(
+                str(next_consumable.get("datetime", 0.0))
+            )
+            total_amount = float(next_consumable.get("amount", 0.0))
+            already_consumed = float(next_consumable.get("consumed", 0.0))
+            buy_price = float(next_consumable.get("price", 0.0))
             unconsumed_amount = total_amount - already_consumed
 
-            print('unconsumed_amount: ', unconsumed_amount)
+            print("unconsumed_amount: ", unconsumed_amount)
             consumption_amount = max(min(amount_needed, unconsumed_amount), 0)
-            print('consumption_amount: ', consumption_amount)
+            print("consumption_amount: ", consumption_amount)
 
             finished = abs(amount_needed - unconsumed_amount) <= TOLERANCE
 
@@ -185,8 +216,7 @@ def analysis_worker():
                 consumption_amount,
                 buy_datetime,
                 buy_price,
-
-                finished
+                finished,
             )
 
         else:
@@ -195,6 +225,7 @@ def analysis_worker():
     except Exception as ex:
         print("Exception:", ex)
         return
+
 
 # TODO calculate profit via price
 

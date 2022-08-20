@@ -1,0 +1,23 @@
+{# required params: url, link_text, pad_top, pad_bottom, form_input #}
+<tr>
+    <td bgcolor="#262D34" align="left">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+                <td bgcolor="#262D34" align="center" style="
+                    padding: {% if pad_top %}{{ pad_top }}{% else %}20px{% endif %} 30px {% if pad_bottom %}{{ pad_bottom }}{% else %}20px{% endif %} 30px;">
+                    <table border="0" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td align="center" style="border-radius: 3px;" bgcolor="#2EC4B6">
+                            {% if form_input %}
+                                <input type="submit" value="{{ link_text }}" class="btn">
+                            {% else %}
+                                <a href="{{ url }}" target="_blank" class="btn">{{ link_text }}</a>
+                            {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </td>
+</tr>

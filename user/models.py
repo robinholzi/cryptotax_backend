@@ -1,4 +1,3 @@
-
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -8,15 +7,15 @@ from django.db import models
 
 
 class BaseUserMixin(models.Model):
-    updated = models.DateTimeField('updated', auto_now=True, blank=True, null=False)
-    created = models.DateTimeField('created', auto_now_add=True, blank=True, null=False)
+    updated = models.DateTimeField("updated", auto_now=True, blank=True, null=False)
+    created = models.DateTimeField("created", auto_now_add=True, blank=True, null=False)
 
     # inherited: first_name = models.CharField('first_name', max_length=150)
-    middle_name = models.CharField('middle_name', max_length=150, blank=True, null=True)
+    middle_name = models.CharField("middle_name", max_length=150, blank=True, null=True)
     # inherited: last_name = models.CharField('last_name', max_length=150)
 
-    def __str__(self):
-        return f'{self.first_name}' f'{self.middle_name}' f'{self.last_name} BaseUser'
+    def __str__(self) -> str:
+        return f"{self.first_name}" f"{self.middle_name}" f"{self.last_name} BaseUser"
 
     class Meta:
         abstract = True
@@ -41,8 +40,8 @@ class CryptoTaxUser(BaseUserMixin, AbstractUser):
 
     pass
 
-    def __str__(self):
-        return f'CryptoTaxUser: [{self.username}]'
+    def __str__(self) -> str:
+        return f"CryptoTaxUser: [{self.username}]"
 
-    # def save(self, *args, **kwargs):
+    # def save(self, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]):
     #     super().save(args, kwargs)

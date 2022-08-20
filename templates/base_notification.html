@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{# msg_type(s): 0 (default) -> info, 1 -> success, 2 -> warning, 3 -> error #}
+{% block content %}
+    {% if msg_type == 1 %}
+        {% include "email/email_base_text.html" with center=True text=msg pad_bottom="30px" el_class="help-block help-block-success" %}
+    {% elif msg_type == 2 %}
+        {% include "email/email_base_text.html" with center=True text="WARNING: "|add:msg pad_bottom="30px" el_class="help-block help-block-warning" %}
+    {% elif msg_type == 3 %}
+        {% include "email/email_base_text.html" with center=True text="ERROR: "|add:msg pad_bottom="30px" el_class="help-block help-block-error" %}
+    {% else %}{# msg_type == 0 #}
+        {% include "email/email_base_text.html" with center=True text=msg pad_bottom="30px" %}
+    {% endif %}
+
+    {% if link and link_text %}
+        {% include "email/email_base_button.html" with url=link link_text=link_text pad_top="0px" pad_bottom="30px" %}
+    {% endif %}
+{% endblock %}

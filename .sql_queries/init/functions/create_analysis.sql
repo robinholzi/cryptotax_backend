@@ -78,11 +78,11 @@ BEGIN -- transaction
 
 	-- insert deposits into deposit table according to tid from transaction insert above
 	INSERT INTO tax_analysis_processabledeposit (
-		transaction_id, buy_datetime, currency_id, amount, taxable)
+		transaction_id, buy_datetime, currency_id, amount, taxable, type)
 	SELECT 
 		i.processable_tid, 
 		pdf.buy_datetime, pdf.currency_id, 
-		pdf.amount, pdf.taxable
+		pdf.amount, pdf.taxable, pdf.type
 	FROM inserted i join v_portfolio_deposit_full pdf 
 		on pdf.tid=i.tid;
 	

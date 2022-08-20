@@ -1,0 +1,8 @@
+{# required params: url, pad_top, pad_bottom #}
+<tr>
+    <td bgcolor="#262D34" align="left" style="
+            padding: {% if pad_top %}{{ pad_top }}{% else %}20px{% endif %} 30px {% if pad_bottom %}{{ pad_bottom }}{% else %}20px{% endif %} 30px;
+            color: #949494; font-family: 'Lato', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 400; line-height: 25px;">
+        <p style="margin: 0;"><a href="{{ url }}" target="_blank" style="color: #90caf9;">{{ url }}</a></p>
+    </td>
+</tr>

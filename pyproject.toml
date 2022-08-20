@@ -1,0 +1,22 @@
+[project]
+name = "CryptoTax Backend"
+version = "0.1.0"
+description = "Inteded to analyse crypto currency taxation."
+authors = [
+    { name = "Robin Holzinger", email = "info@robinh.xyz" },
+]
+python = "3.10"
+
+[tool.isort]
+profile = "black"
+skip = ["venv", "__pycache__", "migrations"]
+line_length = 120
+force_grid_wrap = 2
+
+[tool.mypy]
+ignore_missing_imports = "True"
+disallow_untyped_defs = "True"
+exclude = ["venv/*", "__init__.py", "__pycache__", "migrations/*"]
+
+[tool.coverage.run]
+omit = ["venv/*", "*__init__.py", "__pycache__", "*/migrations/*"]

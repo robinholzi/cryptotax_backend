@@ -1,0 +1,10 @@
+{# required params: text, pad_top, pad_bottom, highlight:bool, el_id, el_class #}
+<tr>
+    <td bgcolor="#262D34" align="left" style="
+            padding: {% if pad_top %}{{ pad_top }}{% else %}20px{% endif %} 30px {% if pad_bottom %}{{ pad_bottom }}{% else %}20px{% endif %} 30px;
+            color: {% if highlight %}#fdfffc{% else %}#949494{% endif %}; font-family: 'Lato', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 400; line-height: 25px;">
+        <p  {% if el_id %}id="{{ el_id }}"{% endif %}
+            {% if el_class %}class="{{ el_class }}"{% endif %}
+            style="margin: 0; {% if center %}text-align: center;{% endif %}">{{ text }}</p>
+    </td>
+</tr>

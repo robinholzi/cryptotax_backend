@@ -1,0 +1,21 @@
+Greetings {{ name }},
+
+{% block email_content %}{% endblock %}
+
+Cheers,
+CryptoTax Team
+{% if show_help_text or show_unsubscribe %}
+
+
+
+{% endif %}
+{% if show_help_text %}
+TODO
+If you have any questions, consider consulting our FAQ page:
+http://TODO/faq/
+{% endif %}
+{% if show_unsubscribe %}
+TODO
+If these emails get annoying, please feel free to unsubscribe:
+http://TODO/faq/
+{% endif %}

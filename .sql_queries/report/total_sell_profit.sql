@@ -1,3 +1,0 @@
-select sum(realized_profit), sum(taxable_realized_profit)
-from v_tax_analysis_analysissellconsumer_full
-where analysis_id=33

@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    {% include "email/email_base_text.html" with text="Greetings "|add:name|add:"," pad_bottom="0px" %}
+    {% block email_content %}{% endblock %}
+    {% include "email/email_base_text.html" with text="Cheers,<br>CryptoTax Team" highlight=True %}
+{% endblock %}
