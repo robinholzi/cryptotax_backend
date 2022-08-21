@@ -3,13 +3,6 @@ from pathlib import Path
 from typing import Optional
 
 from django.core.exceptions import ImproperlyConfigured
-from dotenv import load_dotenv
-
-sep = os.path.sep
-DOT_ENV_STRING = str(
-    str(Path(__file__).resolve().parent.parent) + f"{sep}.conf{sep}.django.env"
-)
-load_dotenv(DOT_ENV_STRING)
 
 
 def get_env_value(env_variable: str) -> Optional[str]:
@@ -26,9 +19,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = get_env_value("SECRET_KEY")
 
-DEBUG = (get_env_value("DEBUG") or "false").lower() == "true"
+DEBUG = (get_env_value("DEBUG") or "0").lower() == "true" or (
+    get_env_value("DEBUG") or "0"
+).lower() == "1"
 
-ALLOWED_HOSTS: list[str] = []
+ALLOWED_HOSTS: list[str] = ["cryptotax.nerotecs.com", "192.168.178.20"]
 
 # Application definition
 INSTALLED_APPS = [
@@ -41,8 +36,6 @@ INSTALLED_APPS = [
     # third party
     "rest_framework.authtoken",
     "crispy_forms",
-    "django_celery_beat",
-    "django_celery_results",
     "corsheaders",
     #    'multiselectfield',
     #    'timedeltatemplatefilter',
@@ -79,12 +72,6 @@ MIDDLEWARE_CLASSES = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
     "http://0.0.0.0:8000",
 ]
 
@@ -144,11 +131,9 @@ WSGI_APPLICATION = "cryptotax_backend.wsgi.application"
 
 
 # Database
-# https://docs.djangoproject.com/en/4.0/ref/settings/#databases
-
 DB_HOST = get_env_value("DATABASE_HOST")
 DB_NAME = get_env_value("DATABASE_NAME")
-DB_PORT = str(get_env_value("DATABASE_PORT"))
+DB_PORT = int(str(get_env_value("DATABASE_PORT")))
 DB_USER = get_env_value("DATABASE_USER")
 DB_PASSWORD = get_env_value("DATABASE_PASSWORD")
 
@@ -237,11 +222,11 @@ LOGGING = {
     "disable_existing_loggers": True,
     "handlers": {
         "console": {
-            "level": "WARNING",
+            "level": "INFO",
             "class": "logging.StreamHandler",
         },
         "file": {
-            "level": "WARNING",
+            "level": "INFO",
             "class": "logging.FileHandler",
             "filename": ".logs/debug.log",
         },
