@@ -2,7 +2,12 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
+
+import cryptotax_backend.tasks as tasks
+
+tasks.sample_task  # ignore unused import error -> used as string
 
 
 def get_env_value(env_variable: str) -> Optional[str]:
@@ -133,7 +138,7 @@ WSGI_APPLICATION = "cryptotax_backend.wsgi.application"
 # Database
 DB_HOST = get_env_value("DATABASE_HOST")
 DB_NAME = get_env_value("DATABASE_NAME")
-DB_PORT = int(str(get_env_value("DATABASE_PORT")))
+DB_PORT = int(str(get_env_value("DATABASE_PORT") or "MISSING ENV DB_PORT"))
 DB_USER = get_env_value("DATABASE_USER")
 DB_PASSWORD = get_env_value("DATABASE_PASSWORD")
 
@@ -242,6 +247,17 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+    },
+}
+# ##################################################################
+
+# [Celery] #########################################################
+CELERY_BROKER_URL = "redis://redis:6379"
+CELERY_RESULT_BACKEND = "redis://redis:6379"
+CELERY_BEAT_SCHEDULE = {
+    "sample_task": {
+        "task": "cryptotax_backend.tasks.sample_task",
+        "schedule": crontab(minute="*/1"),
     },
 }
 # ##################################################################

@@ -5,4 +5,8 @@ from __future__ import (
 
 from cryptotax_backend.db import initialize_db
 
+from .celery import app as celery_app
+
 initialize_db()
+
+__all__ = ("celery_app",)

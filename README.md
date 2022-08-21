@@ -38,8 +38,9 @@ Inteded to analyse crypto currency taxation (primarily for Germany)
 ### root makefile usage -> build docker stack
 1) ```make secrets``` (terminate with CTRL+Z or EOF then enter)
 2) ```make build```
-3) ```make deploy```
-4) End: ```make clean```
+3) ```make deploy-build```
+4) ```make deploy```
+5) End: ```make clean```
 
 ### Related Projects
 - [ReactJS Frontend](https://github.com/nerotyc/cryptotax_frontend)

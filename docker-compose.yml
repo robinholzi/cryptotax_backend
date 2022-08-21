@@ -1,10 +1,10 @@
 version: '3.9'
 
 services:
-  web:
+  api:
     image: backend
     build: ./backend
-    entrypoint: /bin/bash -c /data/entrypoint.sh
+    entrypoint:  "/bin/bash -c /data/entrypoint.sh"
     volumes:
       - ./backend/:/usr/src/app/
       - ./entrypoint.sh:/data/entrypoint.sh
@@ -26,32 +26,66 @@ services:
       EMAIL_PORT: 587
       EMAIL_HOST_USER: 'nerotecs@gmail.com'
 #      EMAIL_HOST_PASSWORD: /run/secrets/EMAIL_HOST_PASSWORD
-#    depends_on:
-#      - redis
-#  redis:
-#    image: redis:alpine
-#  celery:
-#    build: ./project
-#    command: celery -A core worker -l info
-#    volumes:
-#      - ./project/:/usr/src/app/
-#    environment:
-#      DEBUG: 1
-#      SECRET_KEY=dbaa1_i7%*3r9-: z-+_mz4r-!qeed@(-a_r(g@k8jo8y3r27%m
-#      DJANGO_ALLOWED_HOSTS: localhost 127.0.0.1 [::1]
-#    depends_on:
-#      - redis
-#  celery-beat:
-#    build: ./project
-#    command: celery -A core beat -l info
-#    volumes:
-#      - ./project/:/usr/src/app/
-#    environment:
-#      DEBUG: 1
-#      SECRET_KEY=dbaa1_i7%*3r9-: z-+_mz4r-!qeed@(-a_r(g@k8jo8y3r27%m
-#      DJANGO_ALLOWED_HOSTS: localhost 127.0.0.1 [::1]
-#    depends_on:
-#      - redis
+      CONTAINER: api
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+
+  celery:
+    image: backend
+    build: ./backend
+    entrypoint:  "/bin/bash -c /data/entrypoint.sh"
+    volumes:
+      - ./backend/:/usr/src/app/
+      - ./entrypoint.sh:/data/entrypoint.sh
+    secrets:
+      - SECRET_KEY
+      - DATABASE_PASSWORD
+      - EMAIL_HOST_PASSWORD
+    environment:
+      DEBUG: 1
+#      SECRET_KEY: /run/secrets/SECRET_KEY
+      DATABASE_HOST: 'db.cryptotax.nerotecs.com'
+      DATABASE_NAME: 'cryptotax'
+      DATABASE_USER: 'cryptotaxx'
+#      DATABASE_PASSWORD: /run/secrets/DATABASE_PASSWORD
+      DATABASE_PORT: 7766
+      EMAIL_HOST: 'smtp.gmail.com'
+      EMAIL_PORT: 587
+      EMAIL_HOST_USER: 'nerotecs@gmail.com'
+#      EMAIL_HOST_PASSWORD: /run/secrets/EMAIL_HOST_PASSWORD
+      CONTAINER: celery
+    depends_on:
+      - redis
+
+  celery-beat:
+    image: backend
+    build: ./backend
+    entrypoint:  "/bin/bash -c /data/entrypoint.sh"
+    volumes:
+      - ./backend/:/usr/src/app/
+      - ./entrypoint.sh:/data/entrypoint.sh
+    secrets:
+      - SECRET_KEY
+      - DATABASE_PASSWORD
+      - EMAIL_HOST_PASSWORD
+    environment:
+      DEBUG: 1
+#      SECRET_KEY: /run/secrets/SECRET_KEY
+      DATABASE_HOST: 'db.cryptotax.nerotecs.com'
+      DATABASE_NAME: 'cryptotax'
+      DATABASE_USER: 'cryptotaxx'
+#      DATABASE_PASSWORD: /run/secrets/DATABASE_PASSWORD
+      DATABASE_PORT: 7766
+      EMAIL_HOST: 'smtp.gmail.com'
+      EMAIL_PORT: 587
+      EMAIL_HOST_USER: 'nerotecs@gmail.com'
+#      EMAIL_HOST_PASSWORD: /run/secrets/EMAIL_HOST_PASSWORD
+      CONTAINER: celery-beat
+    depends_on:
+      - redis
 
 secrets:
   SECRET_KEY:

@@ -9,6 +9,10 @@ secrets:
 build:
 	docker build ./backend
 
+# supposed to fail after build
+deploy-build:
+	docker-compose up --build
+
 deploy:
 	docker stack deploy --compose-file=docker-compose.yml cryptotax-backend-dev
 
@@ -17,7 +21,10 @@ inspect:
 	docker inspect wjwl7p4hd7gzgq69crewebikp
 
 clean:
-	docker service rm cryptotax-backend-dev_web
+	docker service rm cryptotax-backend-dev_celery
+	docker service rm cryptotax-backend-dev_celery-beat
+	docker service rm cryptotax-backend-dev_redis
+	docker service rm cryptotax-backend-dev_api
 
 clean-secrets:
 	docker secret rm SECRET_KEY
