@@ -85,7 +85,7 @@ def signup_view(
 
 # TODO rate limit!
 @api_view(["POST"])
-@exception_handler
+@exception_handler()
 def signup_resend_email(
     request: Request, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]
 ) -> Response:

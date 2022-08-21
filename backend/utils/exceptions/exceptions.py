@@ -23,6 +23,17 @@ class APIExceptionBadRequest(APIException):
         super().__init__(message, detail, status_code, error_code)
 
 
+class DataBaseException(APIException):
+    def __init__(
+        self,
+        message: str = "Database Error",
+        detail: str = "",
+        status_code: int = 500,
+        error_code: int = 0,
+    ):
+        super().__init__(message, detail, status_code, error_code)
+
+
 class APIExceptionNotFound(APIException):
     def __init__(
         self,

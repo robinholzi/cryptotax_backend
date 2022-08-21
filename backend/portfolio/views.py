@@ -74,8 +74,8 @@ def portfolio_list_my(
         0,
         "portfolios retrieved successfully.",
         data={
-            "page_size": page_size,  # TODO unused
-            "number_pages": ceil(float(number_portfolios) / page_size),  # TODO unused
+            "page_size": page_size,
+            "number_pages": ceil(float(number_portfolios) / page_size),
             "number_portfolios": number_portfolios,
             "portfolios": portfolios,
         },
@@ -500,7 +500,7 @@ def portfolio_list_orders(
 
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
-@exception_handler
+@exception_handler()
 @ensure_authenticated_user
 def portfolio_list_deposits(
     request: Request, pid: int, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]
@@ -563,7 +563,7 @@ def portfolio_list_deposits(
 
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
-@exception_handler
+@exception_handler()
 @ensure_authenticated_user
 def portfolio_list_transfers(
     request: Request, pid: int, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]

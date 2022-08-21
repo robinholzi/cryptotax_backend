@@ -21,9 +21,11 @@ from tax_analysis.models import (
     ProcessableTransaction,
     ProcessableTransfer,
 )
+from utils.exceptions.exception_handlers import db_exception_handler
 
 
 @transaction.atomic
+@db_exception_handler(message="Analysis creation not successful.")
 def create_analysis(
     portfolio_id: int,
     title: str,
@@ -41,41 +43,37 @@ def create_analysis(
         (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    query_str,
-                    [
-                        portfolio_id,
-                        title,
-                        base_currency.tag,
-                        algo,
-                        transfer_algo,
-                        untaxed_allowance,
-                        mining_tax_method,
-                        mining_deposit_profit_rate,
-                        cross_wallet_sells,
-                        taxable_period_days,
-                    ],
-                )
-                raw_fetched = cursor.fetchall()
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query_str,
+                [
+                    portfolio_id,
+                    title,
+                    base_currency.tag,
+                    algo,
+                    transfer_algo,
+                    untaxed_allowance,
+                    mining_tax_method,
+                    mining_deposit_profit_rate,
+                    cross_wallet_sells,
+                    taxable_period_days,
+                ],
+            )
+            raw_fetched = cursor.fetchall()
 
-                if len(raw_fetched) == 0:
-                    return None
-
-                for raw in raw_fetched:
-                    return int(raw[0])
-
+            if len(raw_fetched) == 0:
                 return None
 
-    except IntegrityError as ie:
-        print(">>?", ie)
-        raise DatabaseErrorWrapper("Analysis creation not successful.")
+            for raw in raw_fetched:
+                return int(raw[0])
+
+            return None
 
 
 # page_no: 1-based
 @transaction.atomic
+@db_exception_handler(message="Analysis list query failed.")
 def query_portfolio_analysis_list(
     portfolio_id: int, pagesize: int, page_no: int = 1
 ) -> list[dict]:
@@ -105,44 +103,40 @@ def query_portfolio_analysis_list(
         offset %s;
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    query_str, [portfolio_id, pagesize, (page_no - 1) * pagesize]
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query_str, [portfolio_id, pagesize, (page_no - 1) * pagesize]
+            )
+
+            analysis_list = []
+
+            for raw in cursor.fetchall():
+                analysis_list.append(
+                    {
+                        "ana_id": raw[0],
+                        "title": raw[1],
+                        "created": raw[2],
+                        "mode": raw[3],
+                        "failed": raw[4],
+                        "algo": raw[5],
+                        "transfer_algo": raw[6],
+                        "base_currency": raw[7],
+                        "txs": raw[8],
+                        "currencies": raw[9],
+                        "wallets": raw[10],
+                        "taxable_profit": raw[11],
+                        "realized_profit": raw[12],
+                        "fee_sum": raw[13],
+                        "progress": raw[14],
+                        "msg": raw[15],
+                    }
                 )
 
-                analysis_list = []
-
-                for raw in cursor.fetchall():
-                    analysis_list.append(
-                        {
-                            "ana_id": raw[0],
-                            "title": raw[1],
-                            "created": raw[2],
-                            "mode": raw[3],
-                            "failed": raw[4],
-                            "algo": raw[5],
-                            "transfer_algo": raw[6],
-                            "base_currency": raw[7],
-                            "txs": raw[8],
-                            "currencies": raw[9],
-                            "wallets": raw[10],
-                            "taxable_profit": raw[11],
-                            "realized_profit": raw[12],
-                            "fee_sum": raw[13],
-                            "progress": raw[14],
-                            "msg": raw[15],
-                        }
-                    )
-
-                return analysis_list
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("Analysis list query failed.")
+            return analysis_list
 
 
+@db_exception_handler(message="Analysis number query failed.")
 def query_portfolio_analysis_number(portfolio_id: int) -> int:
     query_str = """
         select count(ana.id)
@@ -150,22 +144,18 @@ def query_portfolio_analysis_number(portfolio_id: int) -> int:
         where ana.portfolio_id=%s
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str, [portfolio_id])
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str, [portfolio_id])
 
-                for raw in cursor.fetchall():
-                    return int(raw[0])
+            for raw in cursor.fetchall():
+                return int(raw[0])
 
-                raise Exception("Illegal State!")
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("Analysis number query failed.")
+            raise Exception("Illegal State!")
 
 
 @transaction.atomic
+@db_exception_handler(message="query_result_detail not successful.")
 def query_result_detail(analysis_id: int) -> Optional[dict]:
     query_str = """
         select ((select count(distinct(pt.id)) from tax_analysis_processabletransaction pt where pt.analysis_id=ana.id)
@@ -188,116 +178,97 @@ def query_result_detail(analysis_id: int) -> Optional[dict]:
         where ana.id=%s;
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str, [analysis_id])
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str, [analysis_id])
 
-                for raw in cursor.fetchall():
-                    return {
-                        "txs": raw[0],
-                        "currencies": raw[1],
-                        "exchanges": raw[2],
-                        "taxable_profit": raw[3],
-                        "realized_profit": raw[4],
-                        "deposit_profit": raw[5],
-                        "sell_profit": raw[6],
-                        "fee_sum": raw[7],
-                        "progress": raw[8],
-                        "msg": raw[9],
-                    }
+            for raw in cursor.fetchall():
+                return {
+                    "txs": raw[0],
+                    "currencies": raw[1],
+                    "exchanges": raw[2],
+                    "taxable_profit": raw[3],
+                    "realized_profit": raw[4],
+                    "deposit_profit": raw[5],
+                    "sell_profit": raw[6],
+                    "fee_sum": raw[7],
+                    "progress": raw[8],
+                    "msg": raw[9],
+                }
 
-                return None
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("query_result_detail not successful.")
+            return None
 
 
 @transaction.atomic
+@db_exception_handler(message="query_profit_by_currency query not successful.")
 def query_profit_by_currency(analysis_id: int) -> list[dict]:
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select * from v_profit_by_currency
-                    where analysis_id=%s
-                """,
-                    [analysis_id],
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select * from v_profit_by_currency
+                where analysis_id=%s
+            """,
+                [analysis_id],
+            )
+            li = []
+            for raw in cursor.fetchall():
+                li.append(
+                    {
+                        "currency": raw[1],
+                        "realized_profit": raw[2],
+                        "taxable_profit": raw[3],
+                    }
                 )
-                li = []
-                for raw in cursor.fetchall():
-                    li.append(
-                        {
-                            "currency": raw[1],
-                            "realized_profit": raw[2],
-                            "taxable_profit": raw[3],
-                        }
-                    )
-                return li
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("query_profit_by_currency query not successful.")
+            return li
 
 
 @transaction.atomic
+@db_exception_handler(message="query_profit_by_exchange query not successful.")
 def query_profit_by_exchange(analysis_id: int) -> list[dict]:
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select * from v_profits_by_exchange
-                    where analysis_id=%s
-                """,
-                    [analysis_id],
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select * from v_profits_by_exchange
+                where analysis_id=%s
+            """,
+                [analysis_id],
+            )
+            li = []
+            for raw in cursor.fetchall():
+                li.append(
+                    {
+                        "exchange_wallet": raw[1],
+                        "realized_profit": raw[2],
+                        "taxable_profit": raw[3],
+                    }
                 )
-                li = []
-                for raw in cursor.fetchall():
-                    li.append(
-                        {
-                            "exchange_wallet": raw[1],
-                            "realized_profit": raw[2],
-                            "taxable_profit": raw[3],
-                        }
-                    )
-                return li
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("query_profit_by_exchange query not successful.")
+            return li
 
 
 @transaction.atomic
+@db_exception_handler(message="query_sell_profit_by_currency query not successful.")
 def query_sell_profit_by_currency(analysis_id: int) -> list[dict]:
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select * from v_sell_profits_by_currency
-                    where analysis_id=%s
-                """,
-                    [analysis_id],
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select * from v_sell_profits_by_currency
+                where analysis_id=%s
+            """,
+                [analysis_id],
+            )
+            li = []
+            for raw in cursor.fetchall():
+                li.append(
+                    {
+                        "currency": raw[1],
+                        "realized_profit": raw[2],
+                        "taxable_profit": raw[3],
+                    }
                 )
-                li = []
-                for raw in cursor.fetchall():
-                    li.append(
-                        {
-                            "currency": raw[1],
-                            "realized_profit": raw[2],
-                            "taxable_profit": raw[3],
-                        }
-                    )
-                return li
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper(
-            "query_sell_profit_by_currency query not successful."
-        )
+            return li
 
 
 @transaction.atomic
@@ -331,60 +302,53 @@ def query_sell_profit_by_exchange(analysis_id: int) -> list[dict]:
 
 
 @transaction.atomic
+@db_exception_handler(message="query_fees_by_currency query not successful.")
 def query_fees_by_currency(analysis_id: int) -> list[dict]:
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select * from v_fees_by_currency
-                    where analysis_id=%s
-                """,
-                    [analysis_id],
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select * from v_fees_by_currency
+                where analysis_id=%s
+            """,
+                [analysis_id],
+            )
+            li = []
+            for raw in cursor.fetchall():
+                li.append(
+                    {
+                        "currency": raw[1],
+                        "fee_sum": raw[2],
+                    }
                 )
-                li = []
-                for raw in cursor.fetchall():
-                    li.append(
-                        {
-                            "currency": raw[1],
-                            "fee_sum": raw[2],
-                        }
-                    )
-                return li
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("query_fees_by_currency query not successful.")
+            return li
 
 
 @transaction.atomic
+@db_exception_handler(message="query_fees_by_exchange query not successful.")
 def query_fees_by_exchange(analysis_id: int) -> list[dict]:
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select * from v_fees_by_exchange
-                    where analysis_id=%s
-                """,
-                    [analysis_id],
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select * from v_fees_by_exchange
+                where analysis_id=%s
+            """,
+                [analysis_id],
+            )
+            li = []
+            for raw in cursor.fetchall():
+                li.append(
+                    {
+                        "exchange_wallet": raw[1],
+                        "fee_sum": raw[2],
+                    }
                 )
-                li = []
-                for raw in cursor.fetchall():
-                    li.append(
-                        {
-                            "exchange_wallet": raw[1],
-                            "fee_sum": raw[2],
-                        }
-                    )
-                return li
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("query_fees_by_exchange query not successful.")
+            return li
 
 
 @transaction.atomic
+@db_exception_handler(message="fetch_processable not successful.")
 def fetch_processable() -> Optional[dict]:
     query_str = """
         with merged as (
@@ -443,91 +407,81 @@ def fetch_processable() -> Optional[dict]:
         on s.ana_id=a.id;
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str)
-                rawFetched = cursor.fetchall()
-                print("rawFetched: ", rawFetched)
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str)
+            rawFetched = cursor.fetchall()
+            print("rawFetched: ", rawFetched)
 
-                if len(rawFetched) == 0:
-                    return None
-
-                for raw in rawFetched:
-                    return {
-                        "type": raw[0],
-                        "ptid": raw[1],
-                        "sub_id": raw[2],
-                        "ana_id": raw[3],
-                        "datetime": raw[4],
-                        "fee": raw[5],
-                        "fee_currency": raw[6],
-                        "cooldown_until": raw[7],  # analysis cooldown (not tx)
-                        "created": raw[8],
-                        "exchange_wallet": raw[9],
-                        "order_from_currency": raw[10],
-                        "order_from_amount": raw[11],
-                        "order_to_currency": raw[12],
-                        "order_to_amount": raw[13],
-                        "deposit_buy_datetime": raw[14],
-                        "deposit_type": raw[15],
-                        "deposit_currency": raw[16],
-                        "deposit_amount": raw[17],
-                        "deposit_taxable": raw[18],
-                        "transfer_from_exchange_wallet": raw[19],
-                        "transfer_currency": raw[20],
-                        "transfer_amount": raw[21],
-                        "base_currency_id": raw[22],
-                    }
-
+            if len(rawFetched) == 0:
                 return None
 
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("fetch_processable not successful.")
+            for raw in rawFetched:
+                return {
+                    "type": raw[0],
+                    "ptid": raw[1],
+                    "sub_id": raw[2],
+                    "ana_id": raw[3],
+                    "datetime": raw[4],
+                    "fee": raw[5],
+                    "fee_currency": raw[6],
+                    "cooldown_until": raw[7],  # analysis cooldown (not tx)
+                    "created": raw[8],
+                    "exchange_wallet": raw[9],
+                    "order_from_currency": raw[10],
+                    "order_from_amount": raw[11],
+                    "order_to_currency": raw[12],
+                    "order_to_amount": raw[13],
+                    "deposit_buy_datetime": raw[14],
+                    "deposit_type": raw[15],
+                    "deposit_currency": raw[16],
+                    "deposit_amount": raw[17],
+                    "deposit_taxable": raw[18],
+                    "transfer_from_exchange_wallet": raw[19],
+                    "transfer_currency": raw[20],
+                    "transfer_amount": raw[21],
+                    "base_currency_id": raw[22],
+                }
+
+            return None
 
 
 @transaction.atomic
+@db_exception_handler(message="Buy order creation failed.")
 def create_buy_order_from_processable_order(
     processable: ProcessableTransaction,
     processable_order: ProcessableOrder,
     analysable: Analysable,
     buy: AnalysisBuy,
 ) -> None:
-    try:
-        with transaction.atomic():
-            processable_order.delete()
-            processable.delete()
-            analysable.save()
-            buy.save()
-
-    except IntegrityError:  # TODO try catch within decorator
-        raise DatabaseErrorWrapper(
-            "create_buy_order_from_processable_order not successful."
-        )
+    with transaction.atomic():
+        processable_order.delete()
+        processable.delete()
+        analysable.save()
+        buy.save()
 
 
 @transaction.atomic
+@db_exception_handler(
+    message="create_sell_order_from_processable_order not successful."
+)
 def create_sell_order_from_processable_order(
     processable: ProcessableTransaction,
     processable_order: ProcessableOrder,
     analysable: Analysable,
     sell: AnalysisSell,
 ) -> None:
-    try:
-        with transaction.atomic():
-            processable_order.delete()
-            processable.delete()
-            analysable.save()
-            sell.save()
-
-    except IntegrityError:  # TODO try catch within decorator
-        raise DatabaseErrorWrapper(
-            "create_sell_order_from_processable_order not successful."
-        )
+    with transaction.atomic():
+        processable_order.delete()
+        processable.delete()
+        analysable.save()
+        sell.save()
 
 
 @transaction.atomic
+@db_exception_handler(
+    message="create_buy_and_sell_order_from_processable_order not successful."
+)
 def create_buy_and_sell_order_from_processable_order(
     processable: ProcessableTransaction,
     processable_order: ProcessableOrder,
@@ -536,64 +490,50 @@ def create_buy_and_sell_order_from_processable_order(
     analysableBuy: Analysable,
     buy: AnalysisBuy,
 ) -> None:
-    try:
-        with transaction.atomic():
-            processable_order.delete()
-            processable.delete()
-            analysableSell.save()
-            analysableBuy.save()
-            sell.save()
-            buy.save()
-
-    except IntegrityError:  # TODO try catch within decorator
-        raise DatabaseErrorWrapper(
-            "create_buy_and_sell_order_from_processable_order not successful."
-        )
+    with transaction.atomic():
+        processable_order.delete()
+        processable.delete()
+        analysableSell.save()
+        analysableBuy.save()
+        sell.save()
+        buy.save()
 
 
 @transaction.atomic
+@db_exception_handler(
+    message="create_transfer_from_processable_transfer not successful."
+)
 def create_transfer_from_processable_transfer(
     processable: ProcessableTransaction,
     processable_transfer: ProcessableTransfer,
     analysable: Analysable,
     transfer: AnalysisTransfer,
 ) -> None:
-    try:
-        with transaction.atomic():
-            processable_transfer.delete()
-            processable.delete()
-            analysable.save()
-            transfer.save()
-
-    except IntegrityError:  # TODO try catch within decorator
-        raise DatabaseErrorWrapper(
-            "create_transfer_from_processable_transfer not successful."
-        )
+    with transaction.atomic():
+        processable_transfer.delete()
+        processable.delete()
+        analysable.save()
+        transfer.save()
 
 
 @transaction.atomic
+@db_exception_handler(message="create_deposit_from_processable_deposit not successful.")
 def create_deposit_from_processable_deposit(
     processable: ProcessableTransaction,
     processable_deposit: ProcessableDeposit,
     analysable: Analysable,
     transfer: AnalysisDeposit,
 ) -> None:
-    try:
-        with transaction.atomic():
-            processable_deposit.delete()
-            processable.delete()
-            analysable.save()
-            transfer.save()
-
-    except IntegrityError:  # TODO try catch within decorator
-        raise DatabaseErrorWrapper(
-            "create_deposit_from_processable_deposit not successful."
-        )
+    with transaction.atomic():
+        processable_deposit.delete()
+        processable.delete()
+        analysable.save()
+        transfer.save()
 
 
 @transaction.atomic
+@db_exception_handler(message="allocate_analyzable not successful.")
 def allocate_analyzable() -> Optional[dict]:
-    print("allocate_analyzable:")
     query_str = """
         with selected as (
             select
@@ -656,45 +596,41 @@ def allocate_analyzable() -> Optional[dict]:
         select * from selected;
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str)
-                rawFetched = cursor.fetchall()
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str)
+            rawFetched = cursor.fetchall()
 
-                if len(rawFetched) == 0:
-                    return None
-
-                for raw in rawFetched:
-                    return {
-                        "sub_id": raw[0],
-                        "type": raw[1],
-                        "tid": raw[2],
-                        "analysis_id": raw[3],
-                        "datetime": raw[4],
-                        "analysed": raw[5],
-                        "fee": raw[6],
-                        "exchange_wallet": raw[7],
-                        "algo": raw[8],
-                        "transfer_algo": raw[9],
-                        "taxable_period": raw[10],
-                        "currency": raw[11],  # for all types
-                        "amount": raw[12],  # for all types
-                        "buy_sell_deposit_price": raw[13],  # buy/sell/deposit
-                        "deposit_buy_datetime": raw[14],
-                        "deposit_taxable": raw[15],
-                        "transfer_from_exchange_wallet": raw[16],
-                    }
-
+            if len(rawFetched) == 0:
                 return None
 
-    except IntegrityError:  # TODO try catch within decorator
-        raise DatabaseErrorWrapper("allocate_analyzable not successful.")
+            for raw in rawFetched:
+                return {
+                    "sub_id": raw[0],
+                    "type": raw[1],
+                    "tid": raw[2],
+                    "analysis_id": raw[3],
+                    "datetime": raw[4],
+                    "analysed": raw[5],
+                    "fee": raw[6],
+                    "exchange_wallet": raw[7],
+                    "algo": raw[8],
+                    "transfer_algo": raw[9],
+                    "taxable_period": raw[10],
+                    "currency": raw[11],  # for all types
+                    "amount": raw[12],  # for all types
+                    "buy_sell_deposit_price": raw[13],  # buy/sell/deposit
+                    "deposit_buy_datetime": raw[14],
+                    "deposit_taxable": raw[15],
+                    "transfer_from_exchange_wallet": raw[16],
+                }
+
+            return None
 
 
 @transaction.atomic
+@db_exception_handler(message="consumable_from_buy_order not successful.")
 def consumable_from_buy_order(buy_order_id: int) -> bool:
-    print("consumable_from_buy_order:")
     query_str = """
         with selected as (
             select b.id buyid, ana.id anaid, b.amount amount, analysis.id analysisid, ana.datetime, b.price
@@ -729,20 +665,15 @@ def consumable_from_buy_order(buy_order_id: int) -> bool:
         ) and exists (select * from selected);
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str, [str(buy_order_id)])
-                return True
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("consumable_from_buy_order not successful.")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str, [str(buy_order_id)])
+            return True
 
 
 @transaction.atomic
+@db_exception_handler(message="consumable_from_deposit not successful.")
 def consumable_from_deposit(deposit_id: int) -> bool:
-    print("consumable_from_deposit: ", deposit_id)
     query_str = """
         with selected as (
             select d.id depid, ana.id anaid, d.amount amount, analysis.id analysisid, d.buy_datetime, d.price
@@ -778,19 +709,15 @@ def consumable_from_deposit(deposit_id: int) -> bool:
         ) and exists (select * from selected);
     """
 
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str, [str(deposit_id)])
-                return True
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("consumable_from_deposit not successful.")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str, [str(deposit_id)])
+            return True
 
 
 # TODO optimal strategy: allocate first: long term (tax free) holdings
 @transaction.atomic
+@db_exception_handler(message="fetch_next_consumable not successful.")
 def fetch_next_consumable(
     analysis_id: int,
     exchange_wallet: str,
@@ -798,7 +725,6 @@ def fetch_next_consumable(
     algo: AnalysisAlgorithm,
     error_tolerance: float = 0.0000000000001,
 ) -> Optional[dict]:
-    print("fetch_next_consumable")
 
     # fifo: lowest date first
     # worst: lowest price first
@@ -843,51 +769,47 @@ def fetch_next_consumable(
     order by {order_by_attr} {asc_desc}
     limit 1
     """
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                print(
-                    "fetch_next_consumable: ",
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            print(
+                "fetch_next_consumable: ",
+                str(analysis_id),
+                str(exchange_wallet),
+                str(currency),
+            )
+            cursor.execute(
+                query_str,
+                [
                     str(analysis_id),
                     str(exchange_wallet),
                     str(currency),
-                )
-                cursor.execute(
-                    query_str,
-                    [
-                        str(analysis_id),
-                        str(exchange_wallet),
-                        str(currency),
-                        str(error_tolerance),
-                    ],
-                )
-                rawFetched = cursor.fetchall()
-                print("fetch_next_consumable res: ", rawFetched)
+                    str(error_tolerance),
+                ],
+            )
+            rawFetched = cursor.fetchall()
+            print("fetch_next_consumable res: ", rawFetched)
 
-                if len(rawFetched) == 0:
-                    print("fetch_next_consumable: query was empty")
-                    # TODO error handling
-                    raise IntegrityError("fetch_next_consumable: query was empty")
+            if len(rawFetched) == 0:
+                print("fetch_next_consumable: query was empty")
+                # TODO error handling
+                raise IntegrityError("fetch_next_consumable: query was empty")
 
-                for raw in rawFetched:
-                    return {
-                        "id": raw[0],
-                        "datetime": raw[1],
-                        "type": raw[2],
-                        "price": raw[3],
-                        "amount": raw[4],
-                        "consumed": raw[5],
-                    }
+            for raw in rawFetched:
+                return {
+                    "id": raw[0],
+                    "datetime": raw[1],
+                    "type": raw[2],
+                    "price": raw[3],
+                    "amount": raw[4],
+                    "consumed": raw[5],
+                }
 
-                print("unknown error")
-                return None
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("fetch_next_consumable not successful.")
+            print("unknown error")
+            return None
 
 
 @transaction.atomic
+@db_exception_handler(message="fetch_already_allocated_sum not successful.")
 def fetch_already_allocated_sum(analysable_id: int) -> Optional[float]:
     print("fetch_already_allocated_sum:")
     query_str = """
@@ -895,28 +817,23 @@ def fetch_already_allocated_sum(analysable_id: int) -> Optional[float]:
         from tax_analysis_analysisconsumer comsumer
         where consumer_id = %s -- analysable
     """
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str, [str(analysable_id)])
-                rawFetched = cursor.fetchall()
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str, [str(analysable_id)])
+            rawFetched = cursor.fetchall()
 
-                if len(rawFetched) == 0:
-                    return None
-
-                for raw in rawFetched:
-                    return float(raw[0])
-
+            if len(rawFetched) == 0:
                 return None
 
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("fetch_already_allocated_sum not successful.")
+            for raw in rawFetched:
+                return float(raw[0])
+
+            return None
 
 
 @transaction.atomic
+@db_exception_handler(message="fetch_already_allocated_sum not successful.")
 def analysable_already_done(analysable_id: int) -> None:
-    print("analysable_already_done:")
     query_str = """
         with selected as (
             select ana.id anaid, analysis.id analysisid
@@ -944,18 +861,14 @@ def analysable_already_done(analysable_id: int) -> None:
             from selected s
         ) and exists (select * from selected);
     """
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(query_str, [str(analysable_id)])
-                return
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("fetch_already_allocated_sum not successful.")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query_str, [str(analysable_id)])
+            return
 
 
 # TODO check weather consumed amount is correct
+@db_exception_handler(message="consume_sell not successful.")
 def consume_sell(
     analysis_id: int,
     analysable_id: int,
@@ -965,7 +878,6 @@ def consume_sell(
     taxable_realized_profit: float,
     finished: bool,
 ) -> None:
-    print("consume_sell:")
     analysed_part = "update tax_analysis_analysable set analysed=True where false"
     if finished:
         analysed_part = """
@@ -1012,28 +924,24 @@ def consume_sell(
     {analysed_part}
     ;
     """
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    query_str,
-                    [
-                        str(analysis_id),
-                        str(consumed_id),
-                        str(analysable_id),
-                        str(consumed_amount),
-                        str(analysable_id),
-                        str(realized_profit),
-                        str(taxable_realized_profit),
-                    ],
-                )
-                return
-
-    except IntegrityError as ie:
-        print(ie)
-        raise DatabaseErrorWrapper("consume_sell not successful.")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query_str,
+                [
+                    str(analysis_id),
+                    str(consumed_id),
+                    str(analysable_id),
+                    str(consumed_amount),
+                    str(analysable_id),
+                    str(realized_profit),
+                    str(taxable_realized_profit),
+                ],
+            )
+            return
 
 
+@db_exception_handler(message="consume_sell not successful.")
 def consume_transfer(
     analysis_id: int,
     analysable_id: int,
@@ -1100,28 +1008,23 @@ def consume_transfer(
     {analysed_part}
     ;
     """
-    try:
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    query_str,
-                    [
-                        str(analysis_id),
-                        str(consumed_id),
-                        str(analysable_id),
-                        str(consumed_amount),
-                        str(analysable_id),
-                        str(buy_datetime),
-                        str(buy_price),
-                        str(consumed_amount),
-                        str(analysable_id),
-                    ],
-                )
-                return
-
-    except IntegrityError as ie:
-        print("consume_sell failed: ", ie)
-        raise DatabaseErrorWrapper("consume_sell not successful.")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                query_str,
+                [
+                    str(analysis_id),
+                    str(consumed_id),
+                    str(analysable_id),
+                    str(consumed_amount),
+                    str(analysable_id),
+                    str(buy_datetime),
+                    str(buy_price),
+                    str(consumed_amount),
+                    str(analysable_id),
+                ],
+            )
+            return
 
 
 # todo fetch comsumed amount and calc difference:

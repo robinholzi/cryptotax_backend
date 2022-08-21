@@ -19,7 +19,7 @@ from utils.response_wrappers import (
 
 
 @api_view(["GET"])
-@exception_handler
+@exception_handler()
 def test(
     request: Request, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]
 ) -> Response:
@@ -27,7 +27,7 @@ def test(
 
 
 @api_view(["GET"])
-@exception_handler
+@exception_handler()
 def send_test_mail(
     request: Request, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]
 ) -> Response:
@@ -42,7 +42,7 @@ def send_test_mail(
 
 @api_view(["GET"])
 @authentication_classes([TokenAuthentication])
-@exception_handler
+@exception_handler()
 @ensure_authenticated_user
 def send_test_mail2(
     request: Request, *args: tuple[Any, ...], **kwargs: tuple[Any, ...]
